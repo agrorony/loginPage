@@ -5,6 +5,7 @@ import mysql from 'mysql2';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import sourceMapSupport from 'source-map-support';
+import { dbConfig } from './dbConfig';
 //import bcrypt from 'bcrypt';  // Add this for password hashing
 sourceMapSupport.install();
 
@@ -58,13 +59,7 @@ app.use(cors());
 app.use(express.json());
 
 // ===== DATABASE CONNECTION =====
-const db = mysql.createConnection({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'research_permissions',
-  port: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 3306
-});
+const db = mysql.createConnection(dbConfig);
 
 db.connect((err) => {
   if (err) {
