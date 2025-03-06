@@ -6,66 +6,71 @@ import socket from '../utils/socket';
  * Interface defining the user data structure
  */
 interface User {
-  id: number;          // Unique user identifier
-  username: string;    // User's login name
+  id: number;          // Maintained for backward compatibility
+  username: string;    // Contains email in the new schema
   created_at: string;  // Timestamp when user was created
 }
 
 /**
- * Interface defining the structure of user permission data
+ * Updated interface for user permissions to match new schema
  */
 interface UserPermission {
-  database_name: string;                      // Name of database the user has access to
-  access_level: 'read' | 'write' | 'admin';   // Permission level (restricted to these 3 values)
+  database_name: string;              // Maps to experiment name in new schema
+  access_level: 'read' | 'admin';     // Simplified to match new schema (only read/admin)
+  dataset_name?: string;              // New field from mac_address_mapping
+  owner?: string;                     // Owner field from permissions table
+  valid_until?: string | null;        // Expiration date for permissions
 }
 
 /**
  * Props interface for the UserDashboard component
  */
 interface UserDashboardProps {
-  user: User;  // User object containing id, username, and created_at
+  user: User;
 }
 
 /**
- * UserDashboard component displays user information and their database permissions
+ * UserDashboard component displays user information and their experiment permissions
  */
 const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   // ===== STATE MANAGEMENT =====
-  const [permissions, setPermissions] = useState<UserPermission[]>([]);  // Store user permissions
-  const [loading, setLoading] = useState(true);                          // Track loading state
-  const [error, setError] = useState<string | null>(null);               // Store error messages
+  const [permissions, setPermissions] = useState<UserPermission[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   /**
-   * Fetch user permissions when component mounts or user ID changes
+   * Fetch user permissions when component mounts or user changes
    */
   useEffect(() => {
-    console.log('Requesting permissions for user:', user.id);
+    console.log('Requesting permissions for user:', user.username);
 
     // Set timeout to handle potential request failures
     const timeout = setTimeout(() => {
       setLoading(false);
       setError('Request timed out. Please try again later.');
-      console.error('Request timed out for user:', user.id);
+      console.error('Request timed out for user:', user.username);
     }, 10000); // 10 seconds timeout
 
-    // Request permissions for the current user from server
-    socket.emit('get_permissions', { userId: user.id });
+    // Request permissions using email (username in the old schema) instead of ID
+    socket.emit('get_permissions', { 
+      userId: user.id,     // Keep for backward compatibility
+      email: user.username // Add email for new schema (username field contains email)
+    });
 
     // Handle server response with permissions data
     socket.on('permissions_response', (response: UserPermission[]) => {
-      console.log('Received permissions response for user:', user.id, response);
-      clearTimeout(timeout);   // Clear timeout as response was received
-      setLoading(false);       // Update loading state
-      setPermissions(response); // Store permissions data
-      console.log('Received permissions for user:', user.id, response);
+      console.log('Received permissions response:', response);
+      clearTimeout(timeout);
+      setLoading(false);
+      setPermissions(response);
     });
 
     // Handle connection errors
     socket.on('connect_error', () => {
-      clearTimeout(timeout);   // Clear timeout as error was received
-      setLoading(false);       // Update loading state
+      clearTimeout(timeout);
+      setLoading(false);
       setError('Connection error. Please try again later.');
-      console.error('Connection error for user:', user.id);
+      console.error('Connection error for user:', user.username);
     });
 
     // Clean up event listeners and timeout when component unmounts
@@ -73,9 +78,9 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
       clearTimeout(timeout);
       socket.off('permissions_response');
       socket.off('connect_error');
-      console.log('Cleaned up listeners for user:', user.id);
+      console.log('Cleaned up listeners for user:', user.username);
     };
-  }, [user.id]); // Dependency array - re-run if user.id changes
+  }, [user.id, user.username]); // Run if either user ID or username changes
 
   // Show loading indicator while fetching permissions
   if (loading) return <div>Loading...</div>;
@@ -94,28 +99,55 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
 
       {/* Permissions Display Section */}
       <div className="space-y-4">
-        <h2 className="text-xl font-semibold mb-4">Your Database Permissions</h2>
+        <h2 className="text-xl font-semibold mb-4">Your Experiment Permissions</h2>
         
-        {/* Map through and display each permission */}
-        {permissions.map((permission, index) => (
-          <div 
-            key={index}
-            className="p-4 border rounded-lg flex justify-between items-center"
-          >
-            {/* Database name */}
-            <span className="font-medium">{permission.database_name}</span>
-            
-            {/* Access level with color coding based on permission type */}
-            <span className={`font-semibold ${
-              // Dynamic color based on access level
-              permission.access_level === 'read' ? 'text-blue-600' :
-              permission.access_level === 'write' ? 'text-green-600' :
-              'text-purple-600' // For 'admin'
-            }`}>
-              {permission.access_level.toUpperCase()}
-            </span>
+        {/* Map through and display each permission with additional fields */}
+        {permissions.length > 0 ? (
+          permissions.map((permission, index) => (
+            <div 
+              key={index}
+              className="p-4 border rounded-lg space-y-2"
+            >
+              <div className="flex justify-between items-center">
+                {/* Experiment name (formerly database_name) */}
+                <span className="font-medium text-lg">{permission.database_name}</span>
+                
+                {/* Access level with color coding */}
+                <span className={`px-2 py-1 rounded font-semibold ${
+                  permission.access_level === 'admin' 
+                    ? 'bg-purple-100 text-purple-800' 
+                    : 'bg-blue-100 text-blue-800'
+                }`}>
+                  {permission.access_level.toUpperCase()}
+                </span>
+              </div>
+              
+              {/* Display new fields from updated schema */}
+              {permission.dataset_name && (
+                <div className="text-sm text-gray-600">
+                  Dataset: {permission.dataset_name}
+                </div>
+              )}
+              
+              {permission.owner && (
+                <div className="text-sm text-gray-600">
+                  Owner: {permission.owner}
+                </div>
+              )}
+              
+              {/* Show expiration date if available */}
+              {permission.valid_until && (
+                <div className="text-sm text-orange-600">
+                  Expires: {new Date(permission.valid_until).toLocaleDateString()}
+                </div>
+              )}
+            </div>
+          ))
+        ) : (
+          <div className="p-4 border rounded-lg text-center text-gray-500">
+            You don't have access to any experiments yet.
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
