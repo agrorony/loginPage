@@ -6,7 +6,7 @@
         "start": "tsc && node dist/index.js",
         "dev": "ts-node-dev index.ts",
         "migrate": "ts-node migrations/migrationRunner.ts",
-        "migrate:create": "node -e \"require('fs').writeFileSync(`migrations/${process.argv[1]}.ts`, require('./migrations/template.js'))\" --"
+        "migrate:create": "node scripts/create-migration.js"
     },
     
     "dependencies": {
