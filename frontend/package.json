@@ -8,9 +8,12 @@
     "build": "react-scripts build"
   },
   "dependencies": {
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-scripts": "^5.0.1"
+    "react-scripts": "^5.0.1",
+    "tailwindcss": "^4.0.12"
   },
   "devDependencies": {
     "typescript": "^4.9.4"
