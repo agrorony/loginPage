@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import socket from '../utils/socket';
+import ExperimentDashboard from './ExperimentDashboard';
 
 // ===== TYPE DEFINITIONS =====
 /**
@@ -38,6 +39,9 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedPermission, setSelectedPermission] = useState<UserPermission | null>(null);
+  
+  // New state for tracking if we're viewing the experiment dashboard
+  const [showExperimentDashboard, setShowExperimentDashboard] = useState<boolean>(false);
   
   // Group permissions by owner for tree organization
   const groupedPermissions = permissions.reduce<Record<string, UserPermission[]>>((groups, permission) => {
@@ -101,8 +105,22 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     setSelectedPermission(permission);
     // Here you would typically trigger data loading or navigation based on the selected experiment
     console.log('Selected experiment:', permission.database_name);
-    // This is where you could emit a Socket.IO event to request experiment data
-    // socket.emit('get_experiment_data', { experiment: permission.database_name });
+  };
+  
+  /**
+   * Handle click on View Data button to show experiment dashboard
+   */
+  const handleViewData = () => {
+    if (selectedPermission) {
+      setShowExperimentDashboard(true);
+    }
+  };
+  
+  /**
+   * Go back from experiment dashboard to the main dashboard
+   */
+  const handleBackToExperiments = () => {
+    setShowExperimentDashboard(false);
   };
 
   // Show loading indicator while fetching permissions
@@ -115,6 +133,19 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     <p className="font-bold">Error</p>
     <p>{error}</p>
   </div>;
+
+  // If experiment dashboard is active, show that instead of the regular dashboard
+  if (showExperimentDashboard && selectedPermission) {
+    return (
+      <ExperimentDashboard 
+        experimentId={selectedPermission.database_name}
+        experimentName={selectedPermission.dataset_name || selectedPermission.database_name}
+        macAddress={selectedPermission.database_name.includes('_') ? 
+          selectedPermission.database_name.split('_')[0] : ''} // This assumes the MAC address might be part of database_name
+        onBack={handleBackToExperiments}
+      />
+    );
+  }
 
   // ===== COMPONENT RENDERING =====
   return (
@@ -221,8 +252,11 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <h3 className="font-medium text-blue-700 mb-2">Actions</h3>
                   <div className="space-y-2">
-                    <button className="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition">
-                      View Data
+                    <button 
+                      className="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition"
+                      onClick={handleViewData}
+                    >
+                      View Data Visualization
                     </button>
                     {selectedPermission.access_level === 'admin' && (
                       <button className="w-full px-4 py-2 bg-purple-500 text-white rounded-md hover:bg-purple-600 transition">
@@ -233,11 +267,14 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
                 </div>
               </div>
               
-              {/* Placeholder for experiment data visualization or content */}
+              {/* Experiment description placeholder */}
               <div className="border-t pt-4">
-                <h3 className="text-lg font-medium mb-4">Experiment Content</h3>
-                <div className="bg-gray-100 p-12 rounded-lg flex items-center justify-center">
-                  <p className="text-gray-500">Select an action to view experiment data</p>
+                <h3 className="text-lg font-medium mb-4">Experiment Description</h3>
+                <div className="bg-gray-100 p-6 rounded-lg">
+                  <p className="text-gray-700">
+                    This experiment contains sensor data from {selectedPermission.dataset_name || 'unknown device'}.
+                    Select "View Data Visualization" to explore the data through interactive charts and statistics.
+                  </p>
                 </div>
               </div>
             </div>
