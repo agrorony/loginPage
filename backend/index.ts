@@ -55,8 +55,12 @@ io.on('connection', (socket) => {
 
       const user = rows[0];
 
+      // === Hash Comparison (Commented Out) ===
       // Compare the provided password with the stored hash
-      const isMatch = await bcrypt.compare(password, user.hashed_password);
+      // const isMatch = await bcrypt.compare(password, user.hashed_password);
+
+      // === Plain Text Comparison ===
+      const isMatch = password === user.hashed_password; // For demonstration only, insecure!
 
       if (isMatch) {
         socket.emit('login_response', { success: true, message: 'Login successful' });

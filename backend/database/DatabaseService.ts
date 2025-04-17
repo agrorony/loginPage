@@ -1,24 +1,15 @@
 // backend/database/DatabaseService.ts
 
-import { DatabaseAdapter } from './adapters/DatabaseAdapter';
-//import { MySQLAdapter } from './adapters/MySQLAdapter';
-//import { BigQueryAdapter } from './adapters/BigQueryAdapter';
+import { BigQuery } from '@google-cloud/bigquery';
 
 export class DatabaseService {
-  private static adapter: DatabaseAdapter;
+  private static instance: BigQuery;
 
-  public static getAdapter(): DatabaseAdapter {
-    if (!DatabaseService.adapter) {
-      // Determine which adapter to use based on environment
-      const dbType = process.env.DB_TYPE || 'mysql';
-      
-      if (dbType.toLowerCase() === 'bigquery') {
-        DatabaseService.adapter = new BigQueryAdapter();
-      } else {
-        DatabaseService.adapter = new MySQLAdapter();
-      }
+  public static getInstance(): BigQuery {
+    if (!DatabaseService.instance) {
+      // Initialize the BigQuery client
+      DatabaseService.instance = new BigQuery();
     }
-    
-    return DatabaseService.adapter;
+    return DatabaseService.instance;
   }
 }
