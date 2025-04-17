@@ -4,7 +4,6 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import sourceMapSupport from 'source-map-support';
-import bcrypt from 'bcryptjs'; // Use for password hashing
 import { bigQueryClient, bigQueryConfig } from './dbConfig';
 
 sourceMapSupport.install();
@@ -35,9 +34,11 @@ io.on('connection', (socket) => {
     const { username, password } = data;
 
     try {
+      console.log('Login attempt received:', { username });
+
       // Query BigQuery for the user by email (username)
       const query = `
-        SELECT email, hashed_password
+        SELECT email, hashed_password, created_at
         FROM \`${bigQueryConfig.dataset}.${bigQueryConfig.userTable}\`
         WHERE email = @username
       `;
@@ -46,25 +47,39 @@ io.on('connection', (socket) => {
         params: { username },
       };
 
+      console.log('Executing query:', query, 'with params:', options.params);
+
       const [rows] = await bigQueryClient.query(options);
 
+      console.log('Query result:', rows);
+
       if (rows.length === 0) {
+        console.log('No user found for email:', username);
         socket.emit('login_response', { success: false, message: 'User not found' });
         return;
       }
 
       const user = rows[0];
 
-      // === Hash Comparison (Commented Out) ===
-      // Compare the provided password with the stored hash
-      // const isMatch = await bcrypt.compare(password, user.hashed_password);
-
-      // === Plain Text Comparison ===
-      const isMatch = password === user.hashed_password; // For demonstration only, insecure!
+      // Plain text password comparison (kept as is for simplicity)
+      const isMatch = password === user.hashed_password;
 
       if (isMatch) {
-        socket.emit('login_response', { success: true, message: 'Login successful' });
+        console.log('Password matched. Constructing response for user:', user);
+
+        // Construct a user object for the response
+        const userResponse = {
+          username: user.email,
+          created_at: user.created_at,
+        };
+
+        socket.emit('login_response', {
+          success: true,
+          message: 'Login successful',
+          user: userResponse,
+        });
       } else {
+        console.log('Invalid password for user:', username);
         socket.emit('login_response', { success: false, message: 'Invalid password' });
       }
     } catch (error) {
