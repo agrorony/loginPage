@@ -4,7 +4,8 @@ node_modules/
 */node_modules
 /.pnp
 .pnp.js
-
+# Ignore Google BigQuery service account key
+read_BQ.json
 # Environment variables
 .env
 .env.local

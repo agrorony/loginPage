@@ -1,13 +1,17 @@
 import dotenv from 'dotenv';
+import { BigQuery } from '@google-cloud/bigquery';
 
 // Ensure environment variables are loaded
 dotenv.config();
 
-// Database configuration using environment variables with fallbacks
-export const dbConfig = {
-  host: process.env.DB_HOST || '127.0.0.1',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'research_permissions',
-  port: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 3306
+// Export BigQuery instance for database interactions
+export const bigQueryClient = new BigQuery({
+  projectId: process.env.GCP_PROJECT_ID, // Google Cloud Project ID
+  keyFilename: process.env.GCP_KEY_FILE, // Path to the service account key file
+});
+
+// Define the dataset and table names
+export const bigQueryConfig = {
+  dataset: process.env.GCP_DATASET || 'your_dataset_name', // Replace with default dataset name
+  userTable: process.env.GCP_USER_TABLE || 'user_table', // Replace with default table name
 };

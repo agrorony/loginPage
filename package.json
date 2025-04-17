@@ -10,6 +10,7 @@
     "concurrently": "^7.0.0"
   },
   "dependencies": {
+    "@google-cloud/bigquery": "^7.9.4",
     "papaparse": "^5.5.2",
     "socket.io-client": "^4.8.1"
   }
