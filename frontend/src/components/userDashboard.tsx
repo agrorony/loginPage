@@ -38,22 +38,9 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   }, {});
 
   useEffect(() => {
-    console.log('Simulating permissions response for debugging...');
-    const simulatedPermissions: UserPermission[] = [
-      {
-        database_name: 'example_db',
-        access_level: 'read', // Matches the defined union type
-        dataset_name: 'example_dataset',
-        owner: 'admin_user',
-        valid_until: null,
-      },
-    ];
-
-    const timeout = setTimeout(() => {
-      setPermissions(simulatedPermissions);
-      setLoading(false);
-      console.log('Simulated permissions response:', simulatedPermissions);
-    }, 2000);
+    console.log('Requesting permissions for user:', user.username);
+    
+    let timeoutId: NodeJS.Timeout;
 
     // Request permissions using email (username in the old schema) instead of ID
     socket.emit('get_permissions', {
@@ -64,22 +51,35 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     // Handle server response with permissions data
     socket.on('permissions_response', (response: UserPermission[]) => {
       console.log('Received permissions response:', response);
-      clearTimeout(timeout);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
       setLoading(false);
       setPermissions(response);
     });
 
     // Handle connection errors
     socket.on('connect_error', () => {
-      clearTimeout(timeout);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
       setLoading(false);
       setError('Connection error. Please try again later.');
       console.error('Connection error for user:', user.username);
     });
 
+    // Set a timeout for the server response
+    timeoutId = setTimeout(() => {
+      console.log('Server response timeout - showing error');
+      setLoading(false);
+      setError('Server did not respond in time. Please try again later.');
+    }, 10000); // 10 seconds timeout
+
     // Clean up event listeners and timeout when component unmounts
     return () => {
-      clearTimeout(timeout);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
       socket.off('permissions_response');
       socket.off('connect_error');
       console.log('Cleaned up listeners for user:', user.username);
@@ -192,4 +192,3 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
 };
 
 export default UserDashboard;
-

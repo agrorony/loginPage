@@ -87,6 +87,82 @@ io.on('connection', (socket) => {
       socket.emit('login_response', { success: false, message: 'Internal server error' });
     }
   });
+
+  /**
+   * Handle permissions request
+   * Gets user permissions from the BigQuery permissions table
+   */
+  socket.on('get_permissions', async (data) => {
+    const { email } = data;
+    
+    try {
+      console.log('Permissions request received for email:', email);
+      
+      // Query BigQuery for the user permissions
+      const query = `
+        SELECT 
+          email,
+          owner,
+          mac_address,
+          experiment,
+          role,
+          valid_from,
+          valid_until,
+          created_at,
+          table_id
+        FROM \`iucc-f4d.user_device_permission.permissions\`
+        WHERE email = @email
+      `;
+      
+      const options = {
+        query,
+        params: { email },
+      };
+
+      console.log('Executing permissions query:', query, 'with params:', options.params);
+
+      const [rows] = await bigQueryClient.query(options);
+      
+      console.log('Permissions query result:', rows);
+      
+      if (rows.length === 0) {
+        console.log('No permissions found for email:', email);
+        socket.emit('permissions_response', []);
+        return;
+      }
+
+      // Transform permissions data to match the frontend's expected format
+      // Handle BigQuery timestamps properly
+      const formattedPermissions = rows.map(permission => {
+        // Safe conversion of BigQuery timestamps to string
+        let validUntil = null;
+        if (permission.valid_until) {
+          try {
+            validUntil = permission.valid_until.value;
+          } catch (e) {
+            console.log('Error processing valid_until timestamp:', e);
+          }
+        }
+
+        return {
+          database_name: permission.experiment || permission.mac_address,
+          access_level: permission.role === 'admin' ? 'admin' : 'read',
+          dataset_name: permission.experiment,
+          owner: permission.owner,
+          valid_until: validUntil,
+          mac_address: permission.mac_address,
+          table_id: permission.table_id
+        };
+      });
+
+      console.log('Formatted permissions:', formattedPermissions);
+      
+      socket.emit('permissions_response', formattedPermissions);
+    } catch (error) {
+      console.error('Error retrieving permissions:', error);
+      socket.emit('permissions_response', []); // Send empty array on error
+    }
+  });
 });
 
 // ===== START SERVER =====
