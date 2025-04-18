@@ -91,6 +91,8 @@ io.on('connection', (socket) => {
   /**
    * Handle permissions request
    * Gets user permissions from the BigQuery permissions table
+   * For admin permissions, retrieves all tables in the dataset
+   * For read permissions, only includes the specific table
    */
   socket.on('get_permissions', async (data) => {
     const { email } = data;
@@ -123,7 +125,7 @@ io.on('connection', (socket) => {
 
       const [rows] = await bigQueryClient.query(options);
       
-      console.log('Permissions query result:', rows);
+      console.log(`Found ${rows.length} permission records for user:`, email);
       
       if (rows.length === 0) {
         console.log('No permissions found for email:', email);
@@ -131,10 +133,14 @@ io.on('connection', (socket) => {
         return;
       }
 
-      // Transform permissions data to match the frontend's expected format
-      // Handle BigQuery timestamps properly
-      const formattedPermissions = rows.map(permission => {
-        // Safe conversion of BigQuery timestamps to string
+      // Process each permission record
+      const formattedPermissions = [];
+      
+      for (const permission of rows) {
+        // Extract project, dataset, and table from table_id
+        const [projectId, datasetId, tableId] = permission.table_id.split('.');
+        
+        // Handle timestamp values safely
         let validUntil = null;
         if (permission.valid_until) {
           try {
@@ -144,19 +150,64 @@ io.on('connection', (socket) => {
           }
         }
 
-        return {
-          database_name: permission.experiment || permission.mac_address,
-          access_level: permission.role === 'admin' ? 'admin' : 'read',
-          dataset_name: permission.experiment,
+        // Base permission object
+        const basePermission = {
           owner: permission.owner,
-          valid_until: validUntil,
           mac_address: permission.mac_address,
-          table_id: permission.table_id
+          experiment: permission.experiment,
+          role: permission.role,
+          valid_until: validUntil,
+          project_id: projectId,
+          dataset_id: datasetId
         };
-      });
+        
+        // If admin role, get all tables in the dataset
+        if (permission.role === 'admin') {
+          try {
+            // Query to get all tables in the dataset
+            console.log(`Fetching tables for dataset: ${datasetId} in project: ${projectId}`);
+            const [tables] = await bigQueryClient.dataset(datasetId).getTables();
+            
+            console.log(`Found ${tables.length} tables in dataset ${datasetId}`);
+            
+            // Add the dataset-level permission for admin
+            formattedPermissions.push({
+              ...basePermission,
+              database_name: `${datasetId} (Dataset)`,
+              access_level: 'admin',
+              dataset_name: datasetId,
+              is_dataset_level: true,
+              table_count: tables.length,
+              tables: tables.map(table => table.id.split('.').pop()) // Just the table names
+            });
+          } catch (error) {
+            console.error(`Error fetching tables for dataset ${datasetId}:`, error);
+            
+            // Add the permission without table information
+            formattedPermissions.push({
+              ...basePermission,
+              database_name: permission.experiment || permission.mac_address,
+              access_level: 'admin',
+              dataset_name: datasetId,
+              is_dataset_level: true,
+              table_count: 0,
+              tables: []
+            });
+          }
+        } else {
+          // For read permissions, add the table-level permission
+          formattedPermissions.push({
+            ...basePermission,
+            database_name: permission.experiment || tableId,
+            access_level: 'read',
+            dataset_name: datasetId,
+            is_dataset_level: false,
+            table_id: permission.table_id
+          });
+        }
+      }
 
-      console.log('Formatted permissions:', formattedPermissions);
-      
+      console.log('Sending formatted permissions:', formattedPermissions);
       socket.emit('permissions_response', formattedPermissions);
     } catch (error) {
       console.error('Error retrieving permissions:', error);
