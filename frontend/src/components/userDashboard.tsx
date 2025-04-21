@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import socket from '../utils/socket';
+import ExperimentDashboard from './ExperimentDashboard';
 
-// ===== TYPE DEFINITIONS =====
 interface User {
   id: number;
   username: string;
   created_at: string;
 }
 
-interface UserPermission {
-  database_name: string;
+export interface UserPermission {
+  database_name: string; // This field now represents experiment name
   access_level: 'read' | 'admin';
-  dataset_name?: string; // Name of the dataset
-  owner?: string; // Owner of the dataset or table
-  valid_until?: string | null; // Expiration date of the permission
+  dataset_name?: string;
+  owner?: string;
+  valid_until?: string | null;
 }
 
 interface UserDashboardProps {
@@ -24,47 +24,100 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   const [permissions, setPermissions] = useState<UserPermission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedPermission, setSelectedPermission] = useState<UserPermission | null>(null);
+  const [showExperimentDashboard, setShowExperimentDashboard] = useState<boolean>(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+
+  // Group permissions by dataset name for header
+  const groupedPermissions = permissions.reduce<Record<string, UserPermission[]>>((groups, permission) => {
+    const dataset = permission.dataset_name || "Unknown dataset";
+    if (!groups[dataset]) {
+      groups[dataset] = [];
+    }
+    groups[dataset].push(permission);
+    return groups;
+  }, {});
 
   useEffect(() => {
-    console.log('Requesting permissions for user:', user);
-
-    // Request permissions from the backend
-    socket.emit('get_permissions', { email: user.username });
-
-    // Listen for permissions response
-    socket.on('permissions_response', (response: UserPermission[]) => {
-      console.log('Permissions response received:', response);
-      setPermissions(response);
-      setLoading(false);
+    console.log('Requesting permissions for user:', user.username);
+    socket.emit('get_permissions', {
+      userId: user.id,
+      email: user.username,
     });
 
-    // Handle connection errors
-    socket.on('connect_error', () => {
-      console.error('Connection error');
-      setError('Connection error. Please try again later.');
+    socket.on('permissions_response', (response: UserPermission[]) => {
+      console.log('Received permissions response:', response);
       setLoading(false);
+      setPermissions(response);
+    });
+
+    socket.on('connect_error', () => {
+      setLoading(false);
+      setError('Connection error. Please try again later.');
+      console.error('Connection error for user:', user.username);
     });
 
     return () => {
       socket.off('permissions_response');
       socket.off('connect_error');
     };
-  }, [user]);
+  }, [user.id, user.username]);
 
-  if (loading) {
+  const toggleGroup = (dataset: string) => {
+    setExpandedGroups((prev) => ({
+      ...prev,
+      [dataset]: !prev[dataset],
+    }));
+  };
+
+  const handlePermissionSelect = (permission: UserPermission) => {
+    setSelectedPermission(permission);
+    console.log('Selected permission (experiment):', permission.database_name);
+  };
+
+  const handleViewData = () => {
+    if (selectedPermission) {
+      setShowExperimentDashboard(true);
+    }
+  };
+
+  const handleBackToExperiments = () => {
+    setShowExperimentDashboard(false);
+  };
+
+  const formatDate = (dateString?: string | null) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return isNaN(date.getTime()) ? dateString : date.toLocaleDateString();
+  };
+
+  if (loading)
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     );
-  }
 
-  if (error) {
+  if (error)
     return (
       <div className="text-red-500 text-center p-4 border border-red-300 rounded bg-red-50">
         <p className="font-bold">Error</p>
         <p>{error}</p>
       </div>
+    );
+
+  if (showExperimentDashboard && selectedPermission) {
+    return (
+      <ExperimentDashboard
+        experimentId={selectedPermission.database_name}
+        experimentName={selectedPermission.dataset_name || selectedPermission.database_name}
+        macAddress={
+          selectedPermission.database_name.includes('_')
+            ? selectedPermission.database_name.split('_')[0]
+            : ''
+        }
+        onBack={handleBackToExperiments}
+      />
     );
   }
 
@@ -72,54 +125,67 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     <div className="max-w-6xl mx-auto p-4">
       <div className="border-b pb-4 mb-6">
         <h1 className="text-2xl font-bold">Welcome, {user.username}!</h1>
-        <p className="text-gray-600">Account created: {new Date(user.created_at).toLocaleDateString()}</p>
+        <p className="text-gray-600">
+          Account created:{' '}
+          {isNaN(new Date(user.created_at).getTime())
+            ? 'Invalid Date'
+            : new Date(user.created_at).toLocaleDateString()}
+        </p>
       </div>
 
-      <div className="bg-gray-50 p-4 rounded-lg border">
+      <div className="mb-6">
         <h2 className="text-xl font-semibold mb-4">Your Permissions</h2>
-        {permissions.length > 0 ? (
-          <ul className="space-y-4">
-            {permissions.map((permission, index) => (
-              <li
-                key={index}
-                className="p-4 rounded-lg border bg-white shadow-sm flex justify-between items-center"
-              >
-                <div>
-                  <p className="font-bold text-lg">{permission.database_name}</p>
-                  <p className="text-gray-600 text-sm">
-                    Access Level: <span className="capitalize">{permission.access_level}</span>
-                  </p>
-                  {permission.dataset_name && (
-                    <p className="text-gray-600 text-sm">Dataset: {permission.dataset_name}</p>
-                  )}
-                  {permission.owner && (
-                    <p className="text-gray-600 text-sm">Owner: {permission.owner}</p>
-                  )}
-                  {permission.valid_until && (
-                    <p className="text-gray-600 text-sm">
-                      Valid Until: {new Date(permission.valid_until).toLocaleDateString()}
-                    </p>
-                  )}
-                </div>
-                <span
-                  className={`px-3 py-1 rounded-full text-sm font-medium ${
-                    permission.access_level === 'admin'
-                      ? 'bg-purple-100 text-purple-800'
-                      : 'bg-blue-100 text-blue-800'
-                  }`}
-                >
-                  {permission.access_level}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="text-center text-gray-500">
-            <p className="text-lg font-medium">No permissions found</p>
-            <p className="mt-1">You don't have access to any datasets or tables yet.</p>
+        {Object.keys(groupedPermissions).length === 0 && (
+          <div className="text-center py-6 text-gray-500 bg-gray-100 rounded-lg">
+            <p>You don't have access to any experiments yet.</p>
           </div>
         )}
+        <ul className="space-y-2">
+          {Object.entries(groupedPermissions).map(([dataset, perms]) => (
+            <li key={dataset} className="border rounded-lg">
+              <button
+                onClick={() => toggleGroup(dataset)}
+                className="w-full text-left px-4 py-2 bg-gray-200 hover:bg-gray-300 font-medium"
+              >
+                {expandedGroups[dataset] ? '▼' : '►'} Dataset: {dataset} ({perms.length})
+              </button>
+              {expandedGroups[dataset] && (
+                <ul className="pl-6">
+                  {perms.map((permission, index) => (
+                    <li
+                      key={`${permission.database_name}-${index}`}
+                      className={`px-4 py-2 border-b last:border-b-0 cursor-pointer ${
+                        selectedPermission?.database_name === permission.database_name
+                          ? 'bg-blue-100 text-blue-800 font-medium'
+                          : 'hover:bg-gray-100'
+                      }`}
+                      onClick={() => handlePermissionSelect(permission)}
+                    >
+                      <div>
+                        <strong>Experiment Name:</strong> {permission.database_name}
+                      </div>
+                      <div>
+                        <strong>Valid Until:</strong> {formatDate(permission.valid_until)}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          ))}
+        </ul>
       </div>
+
+      {selectedPermission && (
+        <div className="mt-4">
+          <button
+            onClick={handleViewData}
+            className="px-4 py-2 rounded bg-green-500 text-white hover:bg-green-600"
+          >
+            View Data
+          </button>
+        </div>
+      )}
     </div>
   );
 };
