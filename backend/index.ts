@@ -9,6 +9,17 @@ import { bigQueryClient, bigQueryConfig } from './dbConfig';
 sourceMapSupport.install();
 dotenv.config();
 
+// Define consistent TypeScript interface for permissions response.
+interface UserPermission {
+  database_name: string;
+  access_level: 'read' | 'admin';
+  dataset_name: string;
+  owner: string;
+  valid_until: string; // Use empty string if no valid date.
+  is_dataset_level: boolean;
+  table_count?: number;
+}
+
 // ===== SERVER INITIALIZATION =====
 const app = express();
 const httpServer = createServer(app);
@@ -48,9 +59,7 @@ io.on('connection', (socket) => {
       };
 
       console.log('Executing query:', query, 'with params:', options.params);
-
       const [rows] = await bigQueryClient.query(options);
-
       console.log('Query result:', rows);
 
       if (rows.length === 0) {
@@ -60,20 +69,14 @@ io.on('connection', (socket) => {
       }
 
       const user = rows[0];
-
-      // Plain text password comparison (kept as is for simplicity)
       const isMatch = password === user.hashed_password;
-
       if (isMatch) {
         console.log('Password matched. Constructing response for user:', user);
-
-        // Construct a user object for the response with required id field
         const userResponse = {
           id: 1, // Adding a default ID since it's required by the frontend
           username: user.email,
           created_at: user.created_at,
         };
-
         socket.emit('login_response', {
           success: true,
           message: 'Login successful',
@@ -91,17 +94,13 @@ io.on('connection', (socket) => {
 
   /**
    * Handle permissions request
-   * Gets user permissions from the BigQuery permissions table
-   * For admin permissions, retrieves all tables in the dataset
-   * For read permissions, only includes the specific table
+   * If the user has admin permission on a table,
+   * query for all tables in that dataset and produce permission entries accordingly.
    */
   socket.on('get_permissions', async (data) => {
     const { userId, email } = data;
-    
     try {
       console.log('Permissions request received for user:', { userId, email });
-      
-      // Query BigQuery for the user permissions
       const query = `
         SELECT 
           email,
@@ -116,153 +115,113 @@ io.on('connection', (socket) => {
         FROM \`${bigQueryConfig.projectId}.user_device_permission.permissions\`
         WHERE email = @email
       `;
-      
       const options = {
         query,
         params: { email },
       };
 
       console.log('Executing permissions query with params:', { email });
-
       const [rows] = await bigQueryClient.query(options);
-      
       console.log(`Found ${rows.length} permission records for user:`, email);
-      
+
       if (rows.length === 0) {
         console.log('No permissions found for email:', email);
         socket.emit('permissions_response', []);
         return;
       }
 
-      // Process each permission record to build a comprehensive permissions list
-      let allPermissions = [];
-      
+      const allPermissions: UserPermission[] = [];
+
       for (const permission of rows) {
-        // Format the valid_until date if it exists
-        let validUntil = null;
+        // Process valid_until to ensure string.
+        let validUntil: string = "";
         if (permission.valid_until) {
           try {
-            validUntil = typeof permission.valid_until === 'string' 
-              ? permission.valid_until 
-              : permission.valid_until.value || permission.valid_until.toString();
+            validUntil =
+              typeof permission.valid_until === 'string'
+                ? permission.valid_until
+                : permission.valid_until.value || permission.valid_until.toString();
           } catch (e) {
             console.log('Error processing valid_until timestamp:', e);
           }
         }
-        
-        // Extract dataset and table information from table_id
-        let projectId, datasetId, tableId;
+
+        // Extract dataset and table information from table_id.
+        let datasetId: string = "unknown_dataset";
+        let tableId: string = "unknown_table";
         if (permission.table_id && permission.table_id.includes('.')) {
           const parts = permission.table_id.split('.');
           if (parts.length === 3) {
-            [projectId, datasetId, tableId] = parts;
+            // parts[0] = project, parts[1] = dataset, parts[2] = table
+            datasetId = parts[1] || datasetId;
+            tableId = parts[2] || tableId;
           }
+        } else {
+          tableId = permission.experiment || permission.mac_address || "unknown_table";
         }
-        
-        // If no valid table_id or it couldn't be parsed, use defaults
-        if (!datasetId) {
-          datasetId = 'unknown_dataset';
-        }
-        if (!tableId) {
-          tableId = permission.experiment || permission.mac_address || 'unknown_table';
-        }
-        
-        // Base permission data shared between admin and read permissions
-        const basePermission = {
-          owner: permission.owner || 'System',
-          mac_address: permission.mac_address,
-          experiment: permission.experiment,
+
+        // Base permission data shared for both roles.
+        const basePermissionData = {
+          owner: permission.owner ? permission.owner : "System",
           valid_until: validUntil,
+          dataset_name: permission.experiment ? permission.experiment : datasetId,
+          is_dataset_level: false,
         };
-        
-        // Handle different roles
+
+        // Process based on role.
         if (permission.role === 'admin') {
+          console.log(`User has admin permission for dataset: ${datasetId}`);
           try {
-            console.log(`User has admin permission for dataset: ${datasetId}`);
-            
-            // For admin role, get all tables in the dataset
-            let dataset;
-            try {
-              dataset = bigQueryClient.dataset(datasetId);
-              const [tables] = await dataset.getTables();
-              
-              console.log(`Found ${tables.length} tables in dataset ${datasetId}`);
-              
-              // Add a dataset-level admin permission
+            const dataset = bigQueryClient.dataset(datasetId);
+            const [tables] = await dataset.getTables();
+            console.log(`Found ${tables.length} tables in dataset ${datasetId}`);
+
+            // Dataset-level admin entry.
+            allPermissions.push({
+              ...basePermissionData,
+              database_name: `${datasetId} (Dataset)`,
+              access_level: 'admin',
+              is_dataset_level: true,
+              table_count: tables.length,
+            });
+
+            // Permissions for each table in dataset.
+            for (const table of tables) {
+              const tableName = table.id ? table.id.split('.').pop() || "unknown_table" : "unknown_table";
               allPermissions.push({
-                ...basePermission,
-                database_name: `${datasetId} (Dataset)`,
+                ...basePermissionData,
+                database_name: tableName,
                 access_level: 'admin',
-                dataset_name: datasetId,
-                is_dataset_level: true,
-                table_count: tables.length
-              });
-              
-              // Add individual permissions for each table in the dataset
-              for (const table of tables) {
-                const tableId = table.id.split('.').pop();
-                allPermissions.push({
-                  ...basePermission,
-                  database_name: tableId,
-                  access_level: 'admin', // Admin gets admin access to all tables
-                  dataset_name: datasetId,
-                  is_dataset_level: false
-                });
-              }
-            } catch (e) {
-              console.error(`Error retrieving tables for dataset ${datasetId}:`, e);
-              
-              // Still add the dataset-level permission even if we fail to list tables
-              allPermissions.push({
-                ...basePermission,
-                database_name: datasetId,
-                access_level: 'admin',
-                dataset_name: datasetId,
-                is_dataset_level: true,
-                table_count: 0
+                is_dataset_level: false,
               });
             }
           } catch (e) {
-            console.error('Error processing admin permission:', e);
-            
-            // Add a basic permission entry if there was an error
+            console.error(`Error retrieving tables for dataset ${datasetId}:`, e);
+            // Fallback entry if table listing fails.
             allPermissions.push({
-              ...basePermission,
-              database_name: tableId || permission.experiment || permission.mac_address || 'Unknown',
+              ...basePermissionData,
+              database_name: datasetId,
               access_level: 'admin',
-              dataset_name: datasetId
+              is_dataset_level: true,
+              table_count: 0,
             });
           }
         } else {
-          // For non-admin roles (read)
           console.log(`User has read permission for table: ${tableId} in dataset: ${datasetId}`);
-          
           allPermissions.push({
-            ...basePermission,
-            database_name: tableId || permission.experiment || permission.mac_address || 'Unknown',
+            ...basePermissionData,
+            database_name: tableId,
             access_level: 'read',
-            dataset_name: datasetId,
-            is_dataset_level: false
+            is_dataset_level: false,
           });
         }
       }
-      
-      // Format the permissions to match the expected frontend interface
-      const formattedPermissions = allPermissions.map(perm => ({
-        database_name: perm.database_name,
-        access_level: perm.access_level,
-        dataset_name: perm.dataset_name || perm.experiment || null,
-        owner: perm.owner,
-        valid_until: perm.valid_until,
-        is_dataset_level: perm.is_dataset_level || false,
-        table_count: perm.table_count
-      }));
 
-      console.log(`Sending ${formattedPermissions.length} formatted permissions`);
-      socket.emit('permissions_response', formattedPermissions);
+      console.log(`Sending ${allPermissions.length} formatted permissions`);
+      socket.emit('permissions_response', allPermissions);
     } catch (error) {
       console.error('Error retrieving permissions:', error);
-      socket.emit('permissions_response', []); // Send empty array on error
+      socket.emit('permissions_response', []);
     }
   });
 });
