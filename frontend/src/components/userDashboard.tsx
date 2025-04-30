@@ -180,7 +180,10 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
                         <strong>Valid Until:</strong> {formatDate(permission.valid_until)}
                       </div>
                       <button
-                        onClick={() => handlePermissionSelect(permission)}
+                        onClick={() => {
+                          handlePermissionSelect(permission);
+                          handleViewData();
+                        }}
                         className="mt-2 px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600"
                       >
                         View Experiment
