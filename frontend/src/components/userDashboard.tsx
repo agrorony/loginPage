@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios'; // Import axios for API calls
 import socket from '../utils/socket';
 import ExperimentDashboard from './ExperimentDashboard';
 
@@ -9,12 +10,18 @@ interface User {
 }
 
 export interface UserPermission {
-  database_name: string; // Represents experiment name or dataset name
+  database_name: string;
   access_level: 'read' | 'admin';
   dataset_name?: string;
   owner?: string;
   valid_until?: string | null;
-  experiments?: string[]; // Experiments for admin-level permissions
+  experiments?: string[];
+}
+
+export interface ExperimentInfo {
+  experimentName: string;
+  firstRecord: string;
+  lastRecord: string;
 }
 
 interface UserDashboardProps {
@@ -23,6 +30,7 @@ interface UserDashboardProps {
 
 const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   const [permissions, setPermissions] = useState<UserPermission[]>([]);
+  const [experimentInfo, setExperimentInfo] = useState<ExperimentInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedPermission, setSelectedPermission] = useState<UserPermission | null>(null);
@@ -31,18 +39,17 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
 
   // Group permissions by dataset name
   const groupedPermissions = permissions.reduce<Record<string, UserPermission[]>>((groups, permission) => {
-    const dataset = permission.dataset_name || "Unknown dataset";
+    const dataset = permission.dataset_name || 'Unknown dataset';
     if (!groups[dataset]) {
       groups[dataset] = [];
     }
 
     if (permission.access_level === 'admin' && permission.experiments) {
-      // Create individual boxes for each experiment under admin permissions
       permission.experiments.forEach((experiment) => {
         groups[dataset].push({
           ...permission,
           database_name: experiment,
-          experiments: undefined, // Clear experiments field for individual boxes
+          experiments: undefined,
         });
       });
     } else {
@@ -61,15 +68,27 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
 
     socket.on('permissions_response', (response: UserPermission[]) => {
       console.log('Received permissions response:', response);
-      setLoading(false);
       setPermissions(response);
     });
 
     socket.on('connect_error', () => {
-      setLoading(false);
       setError('Connection error. Please try again later.');
       console.error('Connection error for user:', user.username);
     });
+
+    const fetchExperimentInfo = async () => {
+      try {
+        const response = await axios.get<ExperimentInfo[]>('/api/experiments'); // Fetch experiment metadata
+        setExperimentInfo(response.data);
+      } catch (err) {
+        console.error('Error fetching experiment info:', err);
+        setError('Failed to load experiment data. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchExperimentInfo();
 
     return () => {
       socket.off('permissions_response');
@@ -105,97 +124,72 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     return isNaN(date.getTime()) ? dateString : date.toLocaleDateString();
   };
 
-  if (loading)
+  if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     );
+  }
 
-  if (error)
-    return (
-      <div className="text-red-500 text-center p-4 border border-red-300 rounded bg-red-50">
-        <p className="font-bold">Error</p>
-        <p>{error}</p>
-      </div>
-    );
+  if (error) {
+    return <div className="text-red-500 text-center">{error}</div>;
+  }
 
   if (showExperimentDashboard && selectedPermission) {
     return (
       <ExperimentDashboard
-        experimentId={selectedPermission.database_name}
-        experimentName={selectedPermission.dataset_name || selectedPermission.database_name}
-        macAddress={
-          selectedPermission.database_name.includes('_')
-            ? selectedPermission.database_name.split('_')[0]
-            : ''
-        }
-        onBack={handleBackToExperiments}
-      />
+        userPermission={selectedPermission}
+        onBack={handleBackToExperiments} experimentId={''} experimentName={''} macAddress={''}      />
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-4">
-      <div className="border-b pb-4 mb-6">
-        <h1 className="text-2xl font-bold">Welcome, {user.username}!</h1>
-        <p className="text-gray-600">
-          Account created:{' '}
-          {isNaN(new Date(user.created_at).getTime())
-            ? 'Invalid Date'
-            : new Date(user.created_at).toLocaleDateString()}
-        </p>
-      </div>
-
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-4">Your Permissions</h2>
-        {Object.keys(groupedPermissions).length === 0 && (
-          <div className="text-center py-6 text-gray-500 bg-gray-100 rounded-lg">
-            <p>You don't have access to any datasets yet.</p>
+    <div className="p-4">
+      <h1 className="text-2xl font-bold mb-4">Available Experiments</h1>
+      {Object.entries(groupedPermissions).map(([dataset, permissions]) => (
+        <div key={dataset} className="mb-4">
+          <div
+            className="cursor-pointer font-semibold text-lg"
+            onClick={() => toggleGroup(dataset)}
+          >
+            {dataset} ({permissions.length})
           </div>
-        )}
-        <ul className="space-y-4">
-          {Object.entries(groupedPermissions).map(([dataset, perms]) => (
-            <li key={dataset} className="border rounded-lg">
-              <button
-                onClick={() => toggleGroup(dataset)}
-                className="w-full text-left px-4 py-2 bg-gray-200 hover:bg-gray-300 font-medium"
-              >
-                {expandedGroups[dataset] ? '▼' : '►'} Dataset: {dataset} ({perms.length})
-              </button>
-              {expandedGroups[dataset] && (
-                <ul className="pl-6 space-y-2">
-                  {perms.map((permission, index) => (
-                    <li
-                      key={`${permission.database_name}-${index}`}
-                      className="p-4 bg-gray-100 border rounded"
-                    >
-                      <div>
-                        <strong>Experiment Name:</strong> {permission.database_name}
-                      </div>
-                      <div>
-                        <strong>Access Level:</strong> {permission.access_level}
-                      </div>
-                      <div>
-                        <strong>Valid Until:</strong> {formatDate(permission.valid_until)}
-                      </div>
-                      <button
-                        onClick={() => {
-                          handlePermissionSelect(permission);
-                          handleViewData();
-                        }}
-                        className="mt-2 px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600"
-                      >
-                        View Experiment
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          ))}
-        </ul>
-      </div>
+          {expandedGroups[dataset] &&
+            permissions.map((permission) => {
+              const experiment = experimentInfo.find(
+                (exp) => exp.experimentName === permission.database_name
+              );
+              return (
+                <div
+                  key={permission.database_name}
+                  className="ml-4 p-2 border rounded cursor-pointer hover:bg-gray-100 transition"
+                  onClick={() => handlePermissionSelect(permission)}
+                >
+                  <h2 className="text-md font-semibold">
+                    {permission.database_name}
+                  </h2>
+                  {experiment && (
+                    <p>
+                      <strong>First Record:</strong>{' '}
+                      {formatDate(experiment.firstRecord)}
+                      <br />
+                      <strong>Last Record:</strong>{' '}
+                      {formatDate(experiment.lastRecord)}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+        </div>
+      ))}
+      <button
+        onClick={handleViewData}
+        className="mt-4 bg-blue-500 text-white py-2 px-4 rounded"
+        disabled={!selectedPermission}
+      >
+        View Experiment Data
+      </button>
     </div>
   );
 };

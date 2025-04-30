@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import sourceMapSupport from 'source-map-support';
 import { bigQueryClient, bigQueryConfig } from './dbConfig';
 import { handleGetPermissions } from './permissionsHandler';
+import experimentRoutes from './routes/experimentRoutes';
 
 sourceMapSupport.install();
 dotenv.config();
@@ -92,6 +93,10 @@ io.on('connection', (socket) => {
   // Delegate permissions handling to permissionsHandler
   handleGetPermissions(socket);
 });
+
+// ===== REGISTER ROUTES =====
+// Register the `/api/experiments` route
+app.use('/api', experimentRoutes);
 
 // ===== START SERVER =====
 const PORT = process.env.PORT || 3001;

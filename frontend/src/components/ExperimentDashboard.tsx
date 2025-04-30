@@ -20,10 +20,20 @@ interface SensorDataPoint {
   [key: string]: any;
 }
 
+export interface UserPermission {
+  database_name: string;
+  access_level: 'read' | 'admin';
+  dataset_name?: string;
+  owner?: string;
+  valid_until?: string | null;
+  experiments?: string[];
+}
+
 interface ExperimentDashboardProps {
   experimentId: string;
   experimentName: string;
   macAddress: string;
+  userPermission: UserPermission;
   onBack: () => void;
 }
 
@@ -31,6 +41,7 @@ const ExperimentDashboard: React.FC<ExperimentDashboardProps> = ({
   experimentId, 
   experimentName, 
   macAddress,
+  userPermission,
   onBack 
 }) => {
   // State variables
@@ -89,6 +100,14 @@ const ExperimentDashboard: React.FC<ExperimentDashboardProps> = ({
         <div>
           <h2 className="text-2xl font-bold">{experimentName}</h2>
           <p className="text-gray-600">MAC Address: {macAddress}</p>
+          <p className="text-gray-600">
+            <strong>Access Level:</strong> {userPermission.access_level.toUpperCase()}
+          </p>
+          {userPermission.valid_until && (
+            <p className="text-gray-600">
+              <strong>Valid Until:</strong> {new Date(userPermission.valid_until).toLocaleDateString()}
+            </p>
+          )}
         </div>
         <button 
           onClick={onBack}
