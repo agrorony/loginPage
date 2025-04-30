@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios'; // Import axios for API calls
+import axios from 'axios';
 import socket from '../utils/socket';
 import ExperimentDashboard from './ExperimentDashboard';
 
@@ -10,18 +10,15 @@ interface User {
 }
 
 export interface UserPermission {
-  database_name: string;
+  experiment_name: string;
   access_level: 'read' | 'admin';
-  dataset_name?: string;
+  dataset_name: string;
   owner?: string;
   valid_until?: string | null;
-  experiments?: string[];
-}
-
-export interface ExperimentInfo {
-  experimentName: string;
-  firstRecord: string;
-  lastRecord: string;
+  table_id: string;
+  project_id: string;
+  mac_address: string;
+  is_admin: boolean;
 }
 
 interface UserDashboardProps {
@@ -30,7 +27,6 @@ interface UserDashboardProps {
 
 const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   const [permissions, setPermissions] = useState<UserPermission[]>([]);
-  const [experimentInfo, setExperimentInfo] = useState<ExperimentInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedPermission, setSelectedPermission] = useState<UserPermission | null>(null);
@@ -43,19 +39,8 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     if (!groups[dataset]) {
       groups[dataset] = [];
     }
-
-    if (permission.access_level === 'admin' && permission.experiments) {
-      permission.experiments.forEach((experiment) => {
-        groups[dataset].push({
-          ...permission,
-          database_name: experiment,
-          experiments: undefined,
-        });
-      });
-    } else {
-      groups[dataset].push(permission);
-    }
-
+    
+    groups[dataset].push(permission);
     return groups;
   }, {});
 
@@ -69,26 +54,14 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     socket.on('permissions_response', (response: UserPermission[]) => {
       console.log('Received permissions response:', response);
       setPermissions(response);
+      setLoading(false);
     });
 
     socket.on('connect_error', () => {
       setError('Connection error. Please try again later.');
       console.error('Connection error for user:', user.username);
+      setLoading(false);
     });
-
-    const fetchExperimentInfo = async () => {
-      try {
-        const response = await axios.get<ExperimentInfo[]>('/api/experiments'); // Fetch experiment metadata
-        setExperimentInfo(response.data);
-      } catch (err) {
-        console.error('Error fetching experiment info:', err);
-        setError('Failed to load experiment data. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchExperimentInfo();
 
     return () => {
       socket.off('permissions_response');
@@ -105,7 +78,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
 
   const handlePermissionSelect = (permission: UserPermission) => {
     setSelectedPermission(permission);
-    console.log('Selected permission (experiment):', permission.database_name);
+    console.log('Selected permission (experiment):', permission.experiment_name);
   };
 
   const handleViewData = () => {
@@ -139,8 +112,18 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   if (showExperimentDashboard && selectedPermission) {
     return (
       <ExperimentDashboard
-        userPermission={selectedPermission}
-        onBack={handleBackToExperiments} experimentId={''} experimentName={''} macAddress={''}      />
+        experimentId={selectedPermission.table_id}
+        experimentName={selectedPermission.experiment_name || 'Unknown Experiment'}
+        macAddress={selectedPermission.mac_address}
+        userPermission={{
+          database_name: selectedPermission.experiment_name || 'Unknown Experiment',
+          access_level: selectedPermission.access_level,
+          dataset_name: selectedPermission.dataset_name,
+          owner: selectedPermission.owner,
+          valid_until: selectedPermission.valid_until
+        }}
+        onBack={handleBackToExperiments}
+      />
     );
   }
 
@@ -157,27 +140,26 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
           </div>
           {expandedGroups[dataset] &&
             permissions.map((permission) => {
-              const experiment = experimentInfo.find(
-                (exp) => exp.experimentName === permission.database_name
-              );
               return (
                 <div
-                  key={permission.database_name}
-                  className="ml-4 p-2 border rounded cursor-pointer hover:bg-gray-100 transition"
+                  key={`${permission.table_id}_${permission.experiment_name}`}
+                  className={`ml-4 p-2 border rounded cursor-pointer hover:bg-gray-100 transition ${
+                    selectedPermission?.experiment_name === permission.experiment_name ? 'bg-blue-50' : ''
+                  }`}
                   onClick={() => handlePermissionSelect(permission)}
                 >
                   <h2 className="text-md font-semibold">
-                    {permission.database_name}
+                    {permission.experiment_name || 'Unknown Experiment'}
                   </h2>
-                  {experiment && (
-                    <p>
-                      <strong>First Record:</strong>{' '}
-                      {formatDate(experiment.firstRecord)}
-                      <br />
-                      <strong>Last Record:</strong>{' '}
-                      {formatDate(experiment.lastRecord)}
-                    </p>
-                  )}
+                  <p className="text-sm text-gray-600">
+                    <strong>Access:</strong> {permission.is_admin ? 'Admin' : 'Read'}<br />
+                    {permission.valid_until && (
+                      <>
+                        <strong>Valid until:</strong> {formatDate(permission.valid_until)}<br />
+                      </>
+                    )}
+                    <strong>Table:</strong> {permission.table_id}
+                  </p>
                 </div>
               );
             })}
@@ -185,7 +167,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
       ))}
       <button
         onClick={handleViewData}
-        className="mt-4 bg-blue-500 text-white py-2 px-4 rounded"
+        className="mt-4 bg-blue-500 text-white py-2 px-4 rounded disabled:opacity-50"
         disabled={!selectedPermission}
       >
         View Experiment Data

@@ -1,4 +1,5 @@
 import { BigQuery } from '@google-cloud/bigquery';
+import { bigQueryConfig } from '../dbConfig'; // Import the configuration
 
 export class ExperimentDataService {
   private bigQueryClient: BigQuery;
@@ -19,7 +20,7 @@ export class ExperimentDataService {
         ExperimentData_Exp_name AS experimentName,
         MIN(timestamp) AS firstRecord,
         MAX(timestamp) AS lastRecord
-      FROM \`${datasetName}.${tableName}\`
+      FROM \`${bigQueryConfig.projectId}.${datasetName}.${tableName}\`
       GROUP BY ExperimentData_Exp_name
     `;
 
@@ -38,7 +39,7 @@ export class ExperimentDataService {
       SELECT
         ExperimentData_Exp_name AS experimentName,
         ARRAY_AGG(sensorField IGNORE NULLS) AS functionalSensors
-      FROM \`${datasetName}.${tableName}\`,
+      FROM \`${bigQueryConfig.projectId}.${datasetName}.${tableName}\`,
       UNNEST([sensor1, sensor2, sensor3, sensor4]) AS sensorField
       WHERE sensorField IS NOT NULL
       GROUP BY ExperimentData_Exp_name

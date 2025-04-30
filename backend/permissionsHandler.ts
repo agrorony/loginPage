@@ -70,20 +70,22 @@ export const handleGetPermissions = (socket: any) => {
           }
         }
 
-        // Base permission object
+        // Create a consistent base permission object
         const basePermission = {
           owner: permission.owner,
           mac_address: permission.mac_address,
-          experiment: permission.experiment,
+          experiment_name: permission.experiment, // Renamed for clarity
           role: permission.role,
           valid_until: validUntil,
           project_id: projectId,
           dataset_name: datasetId,
+          table_id: permission.table_id,
+          access_level: permission.role === 'admin' ? 'admin' : 'read', // Simplified access level
         };
 
         console.log(`[get_permissions] Base permission object: ${JSON.stringify(basePermission)}`);
 
-        // If admin role, query experiment names instead of fetching all tables
+        // If admin role, query experiment names
         if (permission.role === 'admin') {
           try {
             console.log(`[get_permissions] Fetching experiment names for table: ${tableId} in dataset: ${datasetId}`);
@@ -95,34 +97,29 @@ export const handleGetPermissions = (socket: any) => {
 
             console.log(`[get_permissions] Found ${experiments.length} experiments in table ${tableId}`);
 
-            // Add the dataset-level permission with experiment details for admin
-            formattedPermissions.push({
-              ...basePermission,
-              database_name: `${datasetId} (Dataset)`,
-              access_level: 'admin',
-              is_dataset_level: true,
-              experiments: experiments.map((exp: any) => exp.ExperimentData_Exp_name),
-            });
+            // For admin users, we'll expand each experiment into a separate permission entry
+            // This makes the frontend processing simpler
+            for (const exp of experiments) {
+              formattedPermissions.push({
+                ...basePermission,
+                experiment_name: exp.ExperimentData_Exp_name,
+                is_admin: true
+              });
+            }
           } catch (error) {
             console.error(`[get_permissions] Error fetching experiment names for table ${tableId}:`, error);
 
             // Add the permission without experiment information
             formattedPermissions.push({
               ...basePermission,
-              database_name: permission.experiment || permission.mac_address,
-              access_level: 'admin',
-              is_dataset_level: true,
-              experiments: [],
+              is_admin: true
             });
           }
         } else {
           // For read permissions, add the table-level permission
           formattedPermissions.push({
             ...basePermission,
-            database_name: permission.experiment || tableId,
-            access_level: 'read',
-            is_dataset_level: false,
-            table_id: permission.table_id,
+            is_admin: false
           });
         }
       }
