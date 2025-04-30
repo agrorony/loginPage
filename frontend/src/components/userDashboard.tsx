@@ -9,11 +9,12 @@ interface User {
 }
 
 export interface UserPermission {
-  database_name: string; // This field now represents experiment name
+  database_name: string; // Represents experiment name or dataset name
   access_level: 'read' | 'admin';
   dataset_name?: string;
   owner?: string;
   valid_until?: string | null;
+  experiments?: string[]; // Experiments for admin-level permissions
 }
 
 interface UserDashboardProps {
@@ -28,13 +29,26 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   const [showExperimentDashboard, setShowExperimentDashboard] = useState<boolean>(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
-  // Group permissions by dataset name for header
+  // Group permissions by dataset name
   const groupedPermissions = permissions.reduce<Record<string, UserPermission[]>>((groups, permission) => {
     const dataset = permission.dataset_name || "Unknown dataset";
     if (!groups[dataset]) {
       groups[dataset] = [];
     }
-    groups[dataset].push(permission);
+
+    if (permission.access_level === 'admin' && permission.experiments) {
+      // Create individual boxes for each experiment under admin permissions
+      permission.experiments.forEach((experiment) => {
+        groups[dataset].push({
+          ...permission,
+          database_name: experiment,
+          experiments: undefined, // Clear experiments field for individual boxes
+        });
+      });
+    } else {
+      groups[dataset].push(permission);
+    }
+
     return groups;
   }, {});
 
@@ -137,10 +151,10 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
         <h2 className="text-xl font-semibold mb-4">Your Permissions</h2>
         {Object.keys(groupedPermissions).length === 0 && (
           <div className="text-center py-6 text-gray-500 bg-gray-100 rounded-lg">
-            <p>You don't have access to any experiments yet.</p>
+            <p>You don't have access to any datasets yet.</p>
           </div>
         )}
-        <ul className="space-y-2">
+        <ul className="space-y-4">
           {Object.entries(groupedPermissions).map(([dataset, perms]) => (
             <li key={dataset} className="border rounded-lg">
               <button
@@ -150,23 +164,27 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
                 {expandedGroups[dataset] ? '▼' : '►'} Dataset: {dataset} ({perms.length})
               </button>
               {expandedGroups[dataset] && (
-                <ul className="pl-6">
+                <ul className="pl-6 space-y-2">
                   {perms.map((permission, index) => (
                     <li
                       key={`${permission.database_name}-${index}`}
-                      className={`px-4 py-2 border-b last:border-b-0 cursor-pointer ${
-                        selectedPermission?.database_name === permission.database_name
-                          ? 'bg-blue-100 text-blue-800 font-medium'
-                          : 'hover:bg-gray-100'
-                      }`}
-                      onClick={() => handlePermissionSelect(permission)}
+                      className="p-4 bg-gray-100 border rounded"
                     >
                       <div>
                         <strong>Experiment Name:</strong> {permission.database_name}
                       </div>
                       <div>
+                        <strong>Access Level:</strong> {permission.access_level}
+                      </div>
+                      <div>
                         <strong>Valid Until:</strong> {formatDate(permission.valid_until)}
                       </div>
+                      <button
+                        onClick={() => handlePermissionSelect(permission)}
+                        className="mt-2 px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600"
+                      >
+                        View Experiment
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -175,17 +193,6 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
           ))}
         </ul>
       </div>
-
-      {selectedPermission && (
-        <div className="mt-4">
-          <button
-            onClick={handleViewData}
-            className="px-4 py-2 rounded bg-green-500 text-white hover:bg-green-600"
-          >
-            View Data
-          </button>
-        </div>
-      )}
     </div>
   );
 };
