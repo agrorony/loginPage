@@ -71,11 +71,11 @@ export const handleGetPermissions = (socket: any) => {
         }
 
         // Create a consistent base permission object
+        // Removed redundant 'role' field, keeping only 'access_level'
         const basePermission = {
           owner: permission.owner,
           mac_address: permission.mac_address,
           experiment_name: permission.experiment, // Renamed for clarity
-          role: permission.role,
           valid_until: validUntil,
           project_id: projectId,
           dataset_name: datasetId,

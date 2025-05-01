@@ -4,7 +4,6 @@ import socket from '../utils/socket';
 import ExperimentDashboard from './ExperimentDashboard';
 
 interface User {
-  id: number;
   username: string;
   created_at: string;
 }
@@ -45,7 +44,6 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   useEffect(() => {
     console.log('Requesting permissions for user:', user.username);
     socket.emit('get_permissions', {
-      userId: user.id,
       email: user.username,
     });
 
@@ -65,7 +63,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
       socket.off('permissions_response');
       socket.off('connect_error');
     };
-  }, [user.id, user.username]);
+  }, [user.username]);
 
   useEffect(() => {
     console.log('Permissions data to be processed:', permissions);
