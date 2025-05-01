@@ -20,6 +20,25 @@ export interface UserPermission {
   is_admin: boolean;
 }
 
+// Interface for experiment metadata
+interface ExperimentMetadata {
+  table_id: string;
+  experiment_name: string;
+  mac_address: string | null;
+  time_range: {
+    first_timestamp: string | null;
+    last_timestamp: string | null;
+  };
+  available_sensors: string[];
+}
+
+// Interface for metadata API response
+interface MetadataApiResponse {
+  success: boolean;
+  message?: string;
+  metadata: ExperimentMetadata[];
+}
+
 // Interface for admin table grouping
 interface AdminTableGroup {
   tableId: string;
@@ -34,7 +53,9 @@ interface UserDashboardProps {
 
 const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   const [permissions, setPermissions] = useState<UserPermission[]>([]);
+  const [metadata, setMetadata] = useState<Record<string, ExperimentMetadata>>({});
   const [loading, setLoading] = useState(true);
+  const [metadataLoading, setMetadataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedPermission, setSelectedPermission] = useState<UserPermission | null>(null);
   const [showExperimentDashboard, setShowExperimentDashboard] = useState<boolean>(false);
@@ -64,6 +85,56 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
       socket.off('connect_error');
     };
   }, [user.username]);
+
+  // Fetch metadata when permissions are loaded
+  useEffect(() => {
+    if (permissions.length > 0) {
+      fetchExperimentMetadata();
+    }
+  }, [permissions]);
+
+  // Function to fetch experiment metadata
+  const fetchExperimentMetadata = async () => {
+    if (permissions.length === 0) return;
+    
+    setMetadataLoading(true);
+    try {
+      // Prepare the request body with experiments information
+      const experiments = permissions.map(permission => ({
+        project_id: permission.project_id,
+        dataset_name: permission.dataset_name,
+        table_id: permission.table_id,
+        experiment_name: permission.experiment_name,
+        mac_address: permission.mac_address
+      }));
+
+      const response = await axios.post<MetadataApiResponse>('/api/experiments/metadata', { experiments });
+      
+      if (response.data.success) {
+        // Create a map for easy lookup by experiment
+        const metadataMap: Record<string, ExperimentMetadata> = {};
+        response.data.metadata.forEach((item: ExperimentMetadata) => {
+          const key = `${item.table_id}_${item.experiment_name}_${item.mac_address || ''}`;
+          metadataMap[key] = item;
+        });
+        
+        setMetadata(metadataMap);
+        console.log('Experiment metadata loaded:', metadataMap);
+      } else {
+        console.error('Failed to fetch metadata:', response.data.message);
+      }
+    } catch (error) {
+      console.error('Error fetching experiment metadata:', error);
+    } finally {
+      setMetadataLoading(false);
+    }
+  };
+
+  // Get metadata for a specific experiment
+  const getExperimentMetadata = (permission: UserPermission) => {
+    const key = `${permission.table_id}_${permission.experiment_name}_${permission.mac_address || ''}`;
+    return metadata[key];
+  };
 
   useEffect(() => {
     console.log('Permissions data to be processed:', permissions);
@@ -144,6 +215,31 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     return isNaN(date.getTime()) ? dateString : date.toLocaleDateString();
   };
 
+  // Format time range nicely for display
+  const formatTimeRange = (firstTime: string | null, lastTime: string | null) => {
+    if (!firstTime || !lastTime) return 'No time data available';
+    
+    const firstDate = new Date(firstTime);
+    const lastDate = new Date(lastTime);
+    
+    if (isNaN(firstDate.getTime()) || isNaN(lastDate.getTime())) {
+      return 'Invalid time data';
+    }
+    
+    const options: Intl.DateTimeFormatOptions = { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    };
+    
+    const formattedFirst = firstDate.toLocaleDateString(undefined, options);
+    const formattedLast = lastDate.toLocaleDateString(undefined, options);
+    
+    return `${formattedFirst} - ${formattedLast}`;
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -177,6 +273,13 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   return (
     <div className="p-4">
       <h1 className="text-2xl font-bold mb-4">Available Experiments</h1>
+      
+      {metadataLoading && (
+        <div className="flex items-center mb-4 text-blue-500">
+          <div className="animate-spin mr-2 h-4 w-4 border-t-2 border-b-2 border-blue-500 rounded-full"></div>
+          <span>Loading experiment details...</span>
+        </div>
+      )}
       
       {Object.entries(groupedData).map(([dataset, { regularPermissions, adminTables }]) => (
         <div key={dataset} className="mb-4">
@@ -214,48 +317,72 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
                   {/* Experiments within admin table */}
                   {expandedAdminTables[adminTable.tableId] && (
                     <div className="ml-4">
-                      {adminTable.experiments.map((permission, index) => (
-                        <div
-                          key={`${permission.table_id}_${permission.experiment_name || 'unknown'}_${permission.mac_address}_${index}`}
-                          className={`p-2 border-l border-b border-r rounded-b cursor-pointer hover:bg-gray-100 transition ${
-                            selectedPermission?.experiment_name === permission.experiment_name ? 'bg-blue-50' : ''
-                          }`}
-                          onClick={() => handlePermissionSelect(permission)}
-                        >
-                          <h3 className="text-md">
-                            {permission.experiment_name || 'Unknown Experiment'}
-                          </h3>
-                          <p className="text-xs text-gray-500">
-                            <strong>MAC:</strong> {permission.mac_address}
-                          </p>
-                        </div>
-                      ))}
+                      {adminTable.experiments.map((permission, index) => {
+                        const experimentMetadata = getExperimentMetadata(permission);
+                        return (
+                          <div
+                            key={`${permission.table_id}_${permission.experiment_name || 'unknown'}_${permission.mac_address}_${index}`}
+                            className={`p-2 border-l border-b border-r rounded-b cursor-pointer hover:bg-gray-100 transition ${
+                              selectedPermission?.experiment_name === permission.experiment_name ? 'bg-blue-50' : ''
+                            }`}
+                            onClick={() => handlePermissionSelect(permission)}
+                          >
+                            <h3 className="text-md">
+                              {permission.experiment_name || 'Unknown Experiment'}
+                            </h3>
+                            <p className="text-xs text-gray-500">
+                              <strong>MAC:</strong> {permission.mac_address}
+                            </p>
+                            {experimentMetadata && experimentMetadata.time_range && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                <strong>Time Range:</strong><br/>
+                                {formatTimeRange(
+                                  experimentMetadata.time_range.first_timestamp,
+                                  experimentMetadata.time_range.last_timestamp
+                                )}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
               ))}
               
               {/* Regular permissions */}
-              {regularPermissions.map((permission, index) => (
-                <div
-                  key={`${permission.table_id}_${permission.experiment_name || 'unknown'}_${permission.mac_address}_${index}`}
-                  className={`p-2 border rounded cursor-pointer hover:bg-gray-100 transition ${
-                    selectedPermission?.experiment_name === permission.experiment_name ? 'bg-blue-50' : ''
-                  }`}
-                  onClick={() => handlePermissionSelect(permission)}
-                >
-                  <h2 className="text-md font-semibold">
-                    {permission.experiment_name || 'Unknown Experiment'}
-                  </h2>
-                  <p className="text-sm text-gray-600">
-                    <strong>Access:</strong> Read<br />
-                    {permission.valid_until && (
-                      <><strong>Valid until:</strong> {formatDate(permission.valid_until)}<br /></>
+              {regularPermissions.map((permission, index) => {
+                const experimentMetadata = getExperimentMetadata(permission);
+                return (
+                  <div
+                    key={`${permission.table_id}_${permission.experiment_name || 'unknown'}_${permission.mac_address}_${index}`}
+                    className={`p-2 border rounded cursor-pointer hover:bg-gray-100 transition ${
+                      selectedPermission?.experiment_name === permission.experiment_name ? 'bg-blue-50' : ''
+                    }`}
+                    onClick={() => handlePermissionSelect(permission)}
+                  >
+                    <h2 className="text-md font-semibold">
+                      {permission.experiment_name || 'Unknown Experiment'}
+                    </h2>
+                    <p className="text-sm text-gray-600">
+                      <strong>Access:</strong> Read<br />
+                      {permission.valid_until && (
+                        <><strong>Valid until:</strong> {formatDate(permission.valid_until)}<br /></>
+                      )}
+                      <strong>Table:</strong> {permission.table_id}
+                    </p>
+                    {experimentMetadata && experimentMetadata.time_range && (
+                      <p className="text-sm text-gray-600 mt-1 border-t pt-1">
+                        <strong>Time Range:</strong><br />
+                        {formatTimeRange(
+                          experimentMetadata.time_range.first_timestamp,
+                          experimentMetadata.time_range.last_timestamp
+                        )}
+                      </p>
                     )}
-                    <strong>Table:</strong> {permission.table_id}
-                  </p>
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

@@ -3,7 +3,8 @@ import { getExperimentMetadata } from '../controllers/experimentMetadataControll
 
 const router = express.Router();
 
-// Wrap the async handler to catch errors and pass them to the next middleware
+// Update the route path to match what the frontend is expecting
+// It should just be '/experiments/metadata' since we're already mounting under '/api'
 router.post('/experiments/metadata', async (req, res, next) => {
   try {
     await getExperimentMetadata(req, res);
