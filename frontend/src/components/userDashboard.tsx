@@ -21,6 +21,14 @@ export interface UserPermission {
   is_admin: boolean;
 }
 
+// Interface for admin table grouping
+interface AdminTableGroup {
+  tableId: string;
+  owner?: string;
+  valid_until?: string | null;
+  experiments: UserPermission[];
+}
+
 interface UserDashboardProps {
   user: User;
 }
@@ -32,17 +40,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   const [selectedPermission, setSelectedPermission] = useState<UserPermission | null>(null);
   const [showExperimentDashboard, setShowExperimentDashboard] = useState<boolean>(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
-
-  // Group permissions by dataset name
-  const groupedPermissions = permissions.reduce<Record<string, UserPermission[]>>((groups, permission) => {
-    const dataset = permission.dataset_name || 'Unknown dataset';
-    if (!groups[dataset]) {
-      groups[dataset] = [];
-    }
-    
-    groups[dataset].push(permission);
-    return groups;
-  }, {});
+  const [expandedAdminTables, setExpandedAdminTables] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     console.log('Requesting permissions for user:', user.username);
@@ -69,10 +67,61 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     };
   }, [user.id, user.username]);
 
+  useEffect(() => {
+    console.log('Permissions data to be processed:', permissions);
+  }, [permissions]);
+
+  // Group permissions by dataset and then by admin tables
+  const groupedData = permissions.reduce<Record<string, {
+    regularPermissions: UserPermission[],
+    adminTables: Record<string, AdminTableGroup>
+  }>>((groups, permission) => {
+    const dataset = permission.dataset_name || 'Unknown dataset';
+    
+    // Initialize dataset group if it doesn't exist
+    if (!groups[dataset]) {
+      groups[dataset] = {
+        regularPermissions: [],
+        adminTables: {}
+      };
+    }
+    
+    if (permission.is_admin) {
+      // Group admin permissions by table_id
+      if (!groups[dataset].adminTables[permission.table_id]) {
+        groups[dataset].adminTables[permission.table_id] = {
+          tableId: permission.table_id,
+          owner: permission.owner,
+          valid_until: permission.valid_until,
+          experiments: []
+        };
+      }
+      
+      // Add experiment to the admin table group
+      groups[dataset].adminTables[permission.table_id].experiments.push(permission);
+    } else {
+      // Add regular permissions directly
+      groups[dataset].regularPermissions.push(permission);
+    }
+    
+    return groups;
+  }, {});
+  
+  useEffect(() => {
+    console.log('Grouped permissions data:', groupedData);
+  }, [groupedData]);
+
   const toggleGroup = (dataset: string) => {
     setExpandedGroups((prev) => ({
       ...prev,
       [dataset]: !prev[dataset],
+    }));
+  };
+
+  const toggleAdminTable = (tableId: string) => {
+    setExpandedAdminTables((prev) => ({
+      ...prev,
+      [tableId]: !prev[tableId],
     }));
   };
 
@@ -130,20 +179,69 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   return (
     <div className="p-4">
       <h1 className="text-2xl font-bold mb-4">Available Experiments</h1>
-      {Object.entries(groupedPermissions).map(([dataset, permissions]) => (
+      
+      {Object.entries(groupedData).map(([dataset, { regularPermissions, adminTables }]) => (
         <div key={dataset} className="mb-4">
+          {/* Dataset header */}
           <div
             className="cursor-pointer font-semibold text-lg"
             onClick={() => toggleGroup(dataset)}
           >
-            {dataset} ({permissions.length})
+            {dataset} ({regularPermissions.length + Object.keys(adminTables).length} items)
           </div>
-          {expandedGroups[dataset] &&
-            permissions.map((permission) => {
-              return (
+          
+          {expandedGroups[dataset] && (
+            <div className="ml-4">
+              {/* Admin table groups */}
+              {Object.values(adminTables).map((adminTable) => (
+                <div key={adminTable.tableId} className="mb-2">
+                  {/* Admin table header */}
+                  <div 
+                    className="p-2 border rounded cursor-pointer hover:bg-gray-50 transition"
+                    onClick={() => toggleAdminTable(adminTable.tableId)}
+                  >
+                    <h2 className="text-md font-semibold">
+                      {adminTable.tableId} (Admin - {adminTable.experiments.length} experiments)
+                    </h2>
+                    <p className="text-sm text-gray-600">
+                      {adminTable.owner && (
+                        <><strong>Owner:</strong> {adminTable.owner}<br /></>
+                      )}
+                      {adminTable.valid_until && (
+                        <><strong>Valid until:</strong> {formatDate(adminTable.valid_until)}<br /></>
+                      )}
+                    </p>
+                  </div>
+                  
+                  {/* Experiments within admin table */}
+                  {expandedAdminTables[adminTable.tableId] && (
+                    <div className="ml-4">
+                      {adminTable.experiments.map((permission, index) => (
+                        <div
+                          key={`${permission.table_id}_${permission.experiment_name || 'unknown'}_${permission.mac_address}_${index}`}
+                          className={`p-2 border-l border-b border-r rounded-b cursor-pointer hover:bg-gray-100 transition ${
+                            selectedPermission?.experiment_name === permission.experiment_name ? 'bg-blue-50' : ''
+                          }`}
+                          onClick={() => handlePermissionSelect(permission)}
+                        >
+                          <h3 className="text-md">
+                            {permission.experiment_name || 'Unknown Experiment'}
+                          </h3>
+                          <p className="text-xs text-gray-500">
+                            <strong>MAC:</strong> {permission.mac_address}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+              
+              {/* Regular permissions */}
+              {regularPermissions.map((permission, index) => (
                 <div
-                  key={`${permission.table_id}_${permission.experiment_name}`}
-                  className={`ml-4 p-2 border rounded cursor-pointer hover:bg-gray-100 transition ${
+                  key={`${permission.table_id}_${permission.experiment_name || 'unknown'}_${permission.mac_address}_${index}`}
+                  className={`p-2 border rounded cursor-pointer hover:bg-gray-100 transition ${
                     selectedPermission?.experiment_name === permission.experiment_name ? 'bg-blue-50' : ''
                   }`}
                   onClick={() => handlePermissionSelect(permission)}
@@ -152,19 +250,19 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
                     {permission.experiment_name || 'Unknown Experiment'}
                   </h2>
                   <p className="text-sm text-gray-600">
-                    <strong>Access:</strong> {permission.is_admin ? 'Admin' : 'Read'}<br />
+                    <strong>Access:</strong> Read<br />
                     {permission.valid_until && (
-                      <>
-                        <strong>Valid until:</strong> {formatDate(permission.valid_until)}<br />
-                      </>
+                      <><strong>Valid until:</strong> {formatDate(permission.valid_until)}<br /></>
                     )}
                     <strong>Table:</strong> {permission.table_id}
                   </p>
                 </div>
-              );
-            })}
+              ))}
+            </div>
+          )}
         </div>
       ))}
+      
       <button
         onClick={handleViewData}
         className="mt-4 bg-blue-500 text-white py-2 px-4 rounded disabled:opacity-50"
