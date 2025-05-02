@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import Login from './components/Login';
 import UserDashboard from './components/userDashboard';
 
+// Updated User interface (removed `id`)
 interface User {
-  id: number;
   username: string;
   created_at: string;
 }
