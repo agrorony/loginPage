@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import ExperimentDataViewer from './ExperimentDataViewer';
 
 interface User {
   username: string;
@@ -154,6 +155,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     const parts = fullTableId.split('.');
     return parts.length > 2 ? parts[2] : fullTableId; // Returns only the table name
   };
+  
   const getExperimentMetadata = (permission: UserPermission) => {
     const key = `${permission.table_id}_${permission.experiment_name}_${permission.mac_address || ''}`;
     return metadata[key];
@@ -269,8 +271,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     return <div className="text-red-500 text-center">{error}</div>;
   }
 
-  
-
+    
   return (
     <div className="p-4">
       <h1 className="text-2xl font-bold mb-4">Available Experiments</h1>
@@ -364,7 +365,6 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
                       )}
                       <strong>Table:</strong> {permission.table_id}
                     </p>
-                    {/* Metadata display removed */}
                   </div>
                 );
               })}
