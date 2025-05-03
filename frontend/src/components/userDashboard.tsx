@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import ExperimentDashboard from './ExperimentDashboard';
 
 interface User {
   username: string;
@@ -270,23 +269,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     return <div className="text-red-500 text-center">{error}</div>;
   }
 
-  if (showExperimentDashboard && selectedPermission) {
-    return (
-      <ExperimentDashboard
-        experimentId={selectedPermission.table_id}
-        experimentName={selectedPermission.experiment_name || 'Unknown Experiment'}
-        macAddress={selectedPermission.mac_address}
-        userPermission={{
-          database_name: selectedPermission.experiment_name || 'Unknown Experiment',
-          access_level: selectedPermission.access_level,
-          dataset_name: selectedPermission.dataset_name,
-          owner: selectedPermission.owner,
-          valid_until: selectedPermission.valid_until
-        }}
-        onBack={handleBackToExperiments}
-      />
-    );
-  }
+  
 
   return (
     <div className="p-4">
@@ -332,7 +315,6 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
                   {expandedAdminTables[adminTable.tableId] && (
                     <div className="ml-4">
                       {adminTable.experiments.map((permission, index) => {
-                        const experimentMetadata = getExperimentMetadata(permission);
                         return (
                           <div
                             key={`${permission.table_id}_${permission.experiment_name || 'unknown'}_${permission.mac_address}_${index}`}
@@ -347,12 +329,11 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
                             <p className="text-xs text-gray-500">
                               <strong>MAC:</strong> {permission.mac_address}
                             </p>
-                            {experimentMetadata && experimentMetadata.time_range && (
-                              <p className="text-xs text-gray-500 mt-1">
-                                <strong>Time Range:</strong><br />
-                                {formatTimeRange(
-                                  experimentMetadata.time_range.first_timestamp,
-                                  experimentMetadata.time_range.last_timestamp
+                            {getExperimentMetadata(permission) && (
+                              <p className="text-xs text-gray-500">
+                                <strong>Time Range:</strong> {formatTimeRange(
+                                  getExperimentMetadata(permission)?.time_range.first_timestamp,
+                                  getExperimentMetadata(permission)?.time_range.last_timestamp
                                 )}
                               </p>
                             )}
@@ -365,7 +346,6 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
               ))}
 
               {regularPermissions.map((permission, index) => {
-                const experimentMetadata = getExperimentMetadata(permission);
                 return (
                   <div
                     key={`${permission.table_id}_${permission.experiment_name || 'unknown'}_${permission.mac_address}_${index}`}
@@ -384,15 +364,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
                       )}
                       <strong>Table:</strong> {permission.table_id}
                     </p>
-                    {experimentMetadata && experimentMetadata.time_range && (
-                      <p className="text-sm text-gray-600 mt-1 border-t pt-1">
-                        <strong>Time Range:</strong><br />
-                        {formatTimeRange(
-                          experimentMetadata.time_range.first_timestamp,
-                          experimentMetadata.time_range.last_timestamp
-                        )}
-                      </p>
-                    )}
+                    {/* Metadata display removed */}
                   </div>
                 );
               })}
