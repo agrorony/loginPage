@@ -102,41 +102,59 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     }
   }, [permissions]);
 
-  // Function to fetch experiment metadata
   const fetchExperimentMetadata = async () => {
     if (permissions.length === 0) return;
-
+  
     setMetadataLoading(true);
     try {
+      // Constructing the experiments payload
       const experiments = permissions.map(permission => ({
         project_id: permission.project_id,
         dataset_name: permission.dataset_name,
-        table_id: permission.table_id,
+        table_id: extractTableId(permission.table_id), // Fix table_id
         experiment_name: permission.experiment_name,
         mac_address: permission.mac_address
       }));
-
+  
+      console.log("Payload sent to /api/experiments/metadata:", experiments);
+  
+      // Sending the API request
       const response = await axios.post<MetadataApiResponse>(`${API_BASE_URL}/api/experiments/metadata`, { experiments });
-
+  
       if (response.data.success) {
+        // Transforming response data into a metadata map
         const metadataMap: Record<string, ExperimentMetadata> = {};
         response.data.metadata.forEach((item: ExperimentMetadata) => {
           const key = `${item.table_id}_${item.experiment_name}_${item.mac_address || ''}`;
           metadataMap[key] = item;
         });
-
+  
         setMetadata(metadataMap);
-        console.log('Experiment metadata loaded:', metadataMap);
+        console.log("Experiment metadata loaded:", metadataMap);
       } else {
-        console.error('Failed to fetch metadata:', response.data.message);
+        console.error("Failed to fetch metadata:", response.data.message);
       }
     } catch (error) {
-      console.error('Error fetching experiment metadata:', error);
+      console.error("Error fetching experiment metadata:", error);
+      console.log("Payload that caused the error:", {
+        experiments: permissions.map(permission => ({
+          project_id: permission.project_id,
+          dataset_name: permission.dataset_name,
+          table_id: extractTableId(permission.table_id), // Log fixed table_id
+          experiment_name: permission.experiment_name,
+          mac_address: permission.mac_address
+        }))
+      });
     } finally {
       setMetadataLoading(false);
     }
   };
-
+  
+  // Helper function to extract table ID
+  const extractTableId = (fullTableId: string): string => {
+    const parts = fullTableId.split('.');
+    return parts.length > 2 ? parts[2] : fullTableId; // Returns only the table name
+  };
   const getExperimentMetadata = (permission: UserPermission) => {
     const key = `${permission.table_id}_${permission.experiment_name}_${permission.mac_address || ''}`;
     return metadata[key];
