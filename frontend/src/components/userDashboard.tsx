@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import socket from '../utils/socket';
 import ExperimentDashboard from './ExperimentDashboard';
 
 interface User {
@@ -18,6 +17,13 @@ export interface UserPermission {
   project_id: string;
   mac_address: string;
   is_admin: boolean;
+}
+
+// Interface for permissions API response
+interface PermissionsResponse {
+  success: boolean;
+  permissions: UserPermission[];
+  message?: string;
 }
 
 // Interface for experiment metadata
@@ -63,27 +69,28 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   const [expandedAdminTables, setExpandedAdminTables] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    console.log('Requesting permissions for user:', user.username);
-    socket.emit('get_permissions', {
-      email: user.username,
-    });
+    const fetchPermissions = async () => {
+      console.log('Requesting permissions for user:', user.username);
+      setLoading(true);
 
-    socket.on('permissions_response', (response: UserPermission[]) => {
-      console.log('Received permissions response:', response);
-      setPermissions(response);
-      setLoading(false);
-    });
-
-    socket.on('connect_error', () => {
-      setError('Connection error. Please try again later.');
-      console.error('Connection error for user:', user.username);
-      setLoading(false);
-    });
-
-    return () => {
-      socket.off('permissions_response');
-      socket.off('connect_error');
+      try {
+        const response = await axios.post<PermissionsResponse>('/api/permissions', { email: user.username });
+        if (response.data.success) {
+          console.log('Received permissions response:', response.data.permissions);
+          setPermissions(response.data.permissions);
+        } else {
+          console.error('Failed to fetch permissions:', response.data.message);
+          setError(response.data.message || 'Failed to fetch permissions');
+        }
+      } catch (err) {
+        console.error('Error fetching permissions:', err);
+        setError('Internal server error while fetching permissions.');
+      } finally {
+        setLoading(false);
+      }
     };
+
+    fetchPermissions();
   }, [user.username]);
 
   // Fetch metadata when permissions are loaded
@@ -96,10 +103,9 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   // Function to fetch experiment metadata
   const fetchExperimentMetadata = async () => {
     if (permissions.length === 0) return;
-    
+
     setMetadataLoading(true);
     try {
-      // Prepare the request body with experiments information
       const experiments = permissions.map(permission => ({
         project_id: permission.project_id,
         dataset_name: permission.dataset_name,
@@ -109,15 +115,14 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
       }));
 
       const response = await axios.post<MetadataApiResponse>('/api/experiments/metadata', { experiments });
-      
+
       if (response.data.success) {
-        // Create a map for easy lookup by experiment
         const metadataMap: Record<string, ExperimentMetadata> = {};
         response.data.metadata.forEach((item: ExperimentMetadata) => {
           const key = `${item.table_id}_${item.experiment_name}_${item.mac_address || ''}`;
           metadataMap[key] = item;
         });
-        
+
         setMetadata(metadataMap);
         console.log('Experiment metadata loaded:', metadataMap);
       } else {
@@ -130,7 +135,6 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     }
   };
 
-  // Get metadata for a specific experiment
   const getExperimentMetadata = (permission: UserPermission) => {
     const key = `${permission.table_id}_${permission.experiment_name}_${permission.mac_address || ''}`;
     return metadata[key];
@@ -140,23 +144,20 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     console.log('Permissions data to be processed:', permissions);
   }, [permissions]);
 
-  // Group permissions by dataset and then by admin tables
   const groupedData = permissions.reduce<Record<string, {
-    regularPermissions: UserPermission[],
-    adminTables: Record<string, AdminTableGroup>
+    regularPermissions: UserPermission[];
+    adminTables: Record<string, AdminTableGroup>;
   }>>((groups, permission) => {
     const dataset = permission.dataset_name || 'Unknown dataset';
-    
-    // Initialize dataset group if it doesn't exist
+
     if (!groups[dataset]) {
       groups[dataset] = {
         regularPermissions: [],
         adminTables: {}
       };
     }
-    
+
     if (permission.is_admin) {
-      // Group admin permissions by table_id
       if (!groups[dataset].adminTables[permission.table_id]) {
         groups[dataset].adminTables[permission.table_id] = {
           tableId: permission.table_id,
@@ -165,17 +166,15 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
           experiments: []
         };
       }
-      
-      // Add experiment to the admin table group
+
       groups[dataset].adminTables[permission.table_id].experiments.push(permission);
     } else {
-      // Add regular permissions directly
       groups[dataset].regularPermissions.push(permission);
     }
-    
+
     return groups;
   }, {});
-  
+
   useEffect(() => {
     console.log('Grouped permissions data:', groupedData);
   }, [groupedData]);
@@ -215,28 +214,27 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     return isNaN(date.getTime()) ? dateString : date.toLocaleDateString();
   };
 
-  // Format time range nicely for display
   const formatTimeRange = (firstTime: string | null, lastTime: string | null) => {
     if (!firstTime || !lastTime) return 'No time data available';
-    
+
     const firstDate = new Date(firstTime);
     const lastDate = new Date(lastTime);
-    
+
     if (isNaN(firstDate.getTime()) || isNaN(lastDate.getTime())) {
       return 'Invalid time data';
     }
-    
-    const options: Intl.DateTimeFormatOptions = { 
-      year: 'numeric', 
-      month: 'short', 
+
+    const options: Intl.DateTimeFormatOptions = {
+      year: 'numeric',
+      month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
     };
-    
+
     const formattedFirst = firstDate.toLocaleDateString(undefined, options);
     const formattedLast = lastDate.toLocaleDateString(undefined, options);
-    
+
     return `${formattedFirst} - ${formattedLast}`;
   };
 
@@ -273,31 +271,28 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   return (
     <div className="p-4">
       <h1 className="text-2xl font-bold mb-4">Available Experiments</h1>
-      
+
       {metadataLoading && (
         <div className="flex items-center mb-4 text-blue-500">
           <div className="animate-spin mr-2 h-4 w-4 border-t-2 border-b-2 border-blue-500 rounded-full"></div>
           <span>Loading experiment details...</span>
         </div>
       )}
-      
+
       {Object.entries(groupedData).map(([dataset, { regularPermissions, adminTables }]) => (
         <div key={dataset} className="mb-4">
-          {/* Dataset header */}
           <div
             className="cursor-pointer font-semibold text-lg"
             onClick={() => toggleGroup(dataset)}
           >
             {dataset} ({regularPermissions.length + Object.keys(adminTables).length} items)
           </div>
-          
+
           {expandedGroups[dataset] && (
             <div className="ml-4">
-              {/* Admin table groups */}
               {Object.values(adminTables).map((adminTable) => (
                 <div key={adminTable.tableId} className="mb-2">
-                  {/* Admin table header */}
-                  <div 
+                  <div
                     className="p-2 border rounded cursor-pointer hover:bg-gray-50 transition"
                     onClick={() => toggleAdminTable(adminTable.tableId)}
                   >
@@ -313,8 +308,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
                       )}
                     </p>
                   </div>
-                  
-                  {/* Experiments within admin table */}
+
                   {expandedAdminTables[adminTable.tableId] && (
                     <div className="ml-4">
                       {adminTable.experiments.map((permission, index) => {
@@ -335,7 +329,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
                             </p>
                             {experimentMetadata && experimentMetadata.time_range && (
                               <p className="text-xs text-gray-500 mt-1">
-                                <strong>Time Range:</strong><br/>
+                                <strong>Time Range:</strong><br />
                                 {formatTimeRange(
                                   experimentMetadata.time_range.first_timestamp,
                                   experimentMetadata.time_range.last_timestamp
@@ -349,8 +343,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
                   )}
                 </div>
               ))}
-              
-              {/* Regular permissions */}
+
               {regularPermissions.map((permission, index) => {
                 const experimentMetadata = getExperimentMetadata(permission);
                 return (
@@ -387,7 +380,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
           )}
         </div>
       ))}
-      
+
       <button
         onClick={handleViewData}
         className="mt-4 bg-blue-500 text-white py-2 px-4 rounded disabled:opacity-50"
