@@ -57,6 +57,8 @@ interface UserDashboardProps {
   user: User;
 }
 
+const API_BASE_URL = 'http://localhost:3001'; // Updated to backend port 3001
+
 const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   const [permissions, setPermissions] = useState<UserPermission[]>([]);
   const [metadata, setMetadata] = useState<Record<string, ExperimentMetadata>>({});
@@ -74,7 +76,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
       setLoading(true);
 
       try {
-        const response = await axios.post<PermissionsResponse>('/api/permissions', { email: user.username });
+        const response = await axios.post<PermissionsResponse>(`${API_BASE_URL}/api/permissions`, { email: user.username });
         if (response.data.success) {
           console.log('Received permissions response:', response.data.permissions);
           setPermissions(response.data.permissions);
@@ -114,7 +116,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
         mac_address: permission.mac_address
       }));
 
-      const response = await axios.post<MetadataApiResponse>('/api/experiments/metadata', { experiments });
+      const response = await axios.post<MetadataApiResponse>(`${API_BASE_URL}/api/experiments/metadata`, { experiments });
 
       if (response.data.success) {
         const metadataMap: Record<string, ExperimentMetadata> = {};
