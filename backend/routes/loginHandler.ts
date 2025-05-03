@@ -1,6 +1,5 @@
 import express, { Request, Response } from 'express';
 import { bigQueryClient, bigQueryConfig } from '../dbConfig';
-import bcrypt from 'bcrypt';
 
 const router = express.Router();
 
@@ -37,7 +36,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     }
 
     const user = rows[0];
-    const isMatch = await bcrypt.compare(password, user.hashed_password);
+    const isMatch = password === user.hashed_password; // Plain text password comparison
 
     if (isMatch) {
       console.log('Password matched. Login successful.');

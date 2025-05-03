@@ -18,15 +18,14 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
-  const [isRegistering, setIsRegistering] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage(''); // Clear previous messages
 
     try {
-      const endpoint = isRegistering ? '/api/register' : '/api/login';
-      console.log('Attempting', isRegistering ? 'registration' : 'login', 'with:', username, password);
+      const endpoint = 'http://localhost:3001/api/login';
+      console.log('Attempting login with:', username, password);
 
       const response = await axios.post<LoginResponse>(endpoint, { username, password });
       console.log('Server response received:', response.data);
@@ -40,7 +39,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         setMessage(response.data.message || 'An error occurred');
       }
     } catch (error) {
-      console.error('Error during login/register:', error);
+      console.error('Error during login:', error);
       setMessage('Internal server error');
     }
   };
@@ -48,9 +47,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="bg-white p-8 rounded-lg shadow-md w-96">
-        <h2 className="text-2xl font-bold mb-6 text-center">
-          {isRegistering ? 'Register' : 'Login'}
-        </h2>
+        <h2 className="text-2xl font-bold mb-6 text-center">Login</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -85,16 +82,9 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             type="submit"
             className="w-full bg-blue-600 text-white rounded-md py-2 hover:bg-blue-700"
           >
-            {isRegistering ? 'Register' : 'Login'}
+            Login
           </button>
         </form>
-
-        <button
-          onClick={() => setIsRegistering(!isRegistering)}
-          className="w-full mt-4 text-sm text-blue-600 hover:text-blue-800"
-        >
-          {isRegistering ? 'Already have an account? Login' : "Don't have an account? Register"}
-        </button>
       </div>
     </div>
   );
