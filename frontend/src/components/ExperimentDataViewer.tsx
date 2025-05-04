@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import axios from 'axios';
 import { UserPermission } from './userDashboard';
 
 interface ExperimentMetadata {
@@ -10,6 +11,12 @@ interface ExperimentMetadata {
     last_timestamp: { value: string } | string | null;
   };
   available_sensors: string[];
+}
+
+interface ExperimentDataResponse {
+  success: boolean;
+  data: any[]; // Replace 'any[]' with the actual shape of the data if known
+  message?: string;
 }
 
 interface ExperimentDataViewerProps {
@@ -29,6 +36,9 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
   const [yDropdownOpen, setYDropdownOpen] = useState(false);
   const [timeRange, setTimeRange] = useState<{ start: string; end: string } | null>(null);
   const [timeDropdownOpen, setTimeDropdownOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const formatDateTime = (dateInput?: { value: string } | string | null) => {
     if (!dateInput) return 'N/A';
@@ -75,6 +85,41 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
   const selectTimeRange = (range: { start: string; end: string }) => {
     setTimeRange(range);
     setTimeDropdownOpen(false);
+  };
+
+  const fetchData = async () => {
+    if (!xAxisSensor || !yAxisSensor || !timeRange) {
+      setErrorMessage('Please select X-Axis, Y-Axis sensors, and time range.');
+      return;
+    }
+
+    const requestBody = {
+      project_id: permission.project_id,
+      dataset_name: permission.dataset_name,
+      table_id: permission.table_id,
+      experiment_name: permission.experiment_name,
+      time_range: timeRange,
+      fields: [xAxisSensor, yAxisSensor]
+    };
+
+    setLoading(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await axios.post<ExperimentDataResponse>('/api/experiments/data', requestBody);
+
+      if (response.data.success) {
+        setSuccessMessage('Data fetched successfully!');
+        console.log('Fetched Data:', response.data.data);
+      } else {
+        setErrorMessage('Failed to fetch data: ' + response.data.message);
+      }
+    } catch (error: any) {
+      setErrorMessage('Error while fetching data: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -230,6 +275,19 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
               </div>
             </div>
           )}
+        </div>
+
+        {/* Fetch Data Button */}
+        <div className="mt-6">
+          <button
+            onClick={fetchData}
+            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:opacity-50"
+            disabled={loading}
+          >
+            {loading ? 'Fetching...' : 'Fetch Data'}
+          </button>
+          {errorMessage && <p className="mt-2 text-red-500">{errorMessage}</p>}
+          {successMessage && <p className="mt-2 text-green-500">{successMessage}</p>}
         </div>
       </div>
     </div>
