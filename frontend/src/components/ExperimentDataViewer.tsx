@@ -25,6 +25,8 @@ interface ExperimentDataViewerProps {
   onBack: () => void;
 }
 
+const API_BASE_URL = 'http://localhost:3001'; // Define the base URL for the backend API
+
 const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
   permission,
   metadata,
@@ -107,7 +109,10 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
     setSuccessMessage(null);
 
     try {
-      const response = await axios.post<ExperimentDataResponse>('/api/experiments/data', requestBody);
+      const response = await axios.post<ExperimentDataResponse>(
+        `${API_BASE_URL}/api/experiments/data`,
+        requestBody
+      );
 
       if (response.data.success) {
         setSuccessMessage('Data fetched successfully!');
