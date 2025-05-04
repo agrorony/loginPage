@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { UserPermission } from './userDashboard';
 
 interface ExperimentMetadata {
@@ -23,37 +23,63 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
   metadata,
   onBack
 }) => {
-  // Format date for display
+  const [xAxisSensor, setXAxisSensor] = useState<string | null>(null);
+  const [yAxisSensor, setYAxisSensor] = useState<string | null>(null);
+  const [xDropdownOpen, setXDropdownOpen] = useState(false);
+  const [yDropdownOpen, setYDropdownOpen] = useState(false);
+  const [timeRange, setTimeRange] = useState<{ start: string; end: string } | null>(null);
+  const [timeDropdownOpen, setTimeDropdownOpen] = useState(false);
+
   const formatDateTime = (dateInput?: { value: string } | string | null) => {
     if (!dateInput) return 'N/A';
-    
-    // Extract the string value if it's an object
-    const dateString = typeof dateInput === 'object' && dateInput !== null && 'value' in dateInput 
-      ? dateInput.value 
-      : dateInput;
-    
-    console.log("Formatting date string (extracted):", dateString);
-    
+    const dateString =
+      typeof dateInput === 'object' && dateInput !== null && 'value' in dateInput
+        ? dateInput.value
+        : dateInput;
+
     try {
-      // Now parse the string
       const date = new Date(dateString);
-      
-      // Check if date is valid
-      if (isNaN(date.getTime())) {
-        console.error("Invalid date after parsing:", dateString);
-        return 'Invalid date';
-      }
-      
+      if (isNaN(date.getTime())) return 'Invalid date';
       return date.toLocaleString();
-    } catch (err) {
-      console.error("Error parsing date:", err);
+    } catch {
       return 'Error parsing date';
     }
   };
 
+  const toggleDropdown = (axis: 'x' | 'y' | 'time') => {
+    if (axis === 'x') {
+      setXDropdownOpen(!xDropdownOpen);
+      setYDropdownOpen(false);
+      setTimeDropdownOpen(false);
+    } else if (axis === 'y') {
+      setYDropdownOpen(!yDropdownOpen);
+      setXDropdownOpen(false);
+      setTimeDropdownOpen(false);
+    } else {
+      setTimeDropdownOpen(!timeDropdownOpen);
+      setXDropdownOpen(false);
+      setYDropdownOpen(false);
+    }
+  };
+
+  const selectSensor = (axis: 'x' | 'y', sensor: string) => {
+    if (axis === 'x') {
+      setXAxisSensor(sensor);
+    } else {
+      setYAxisSensor(sensor);
+    }
+    setXDropdownOpen(false);
+    setYDropdownOpen(false);
+  };
+
+  const selectTimeRange = (range: { start: string; end: string }) => {
+    setTimeRange(range);
+    setTimeDropdownOpen(false);
+  };
+
   return (
     <div className="p-4">
-      <button 
+      <button
         onClick={onBack}
         className="mb-4 bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded flex items-center"
       >
@@ -62,7 +88,7 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
 
       <div className="bg-white shadow-md rounded-lg p-6">
         <h1 className="text-2xl font-bold mb-6">{permission.experiment_name}</h1>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <h2 className="text-lg font-semibold mb-3">Experiment Details</h2>
@@ -91,7 +117,7 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
               )}
             </div>
           </div>
-          
+
           {metadata && (
             <div>
               <h2 className="text-lg font-semibold mb-3">Experiment Metadata</h2>
@@ -103,14 +129,91 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
                   <span className="font-medium">Last Timestamp:</span> {formatDateTime(metadata.time_range.last_timestamp)}
                 </div>
                 <div>
-                  <span className="font-medium">Available Sensors:</span> 
+                  <span className="font-medium">Available Sensors:</span>
                   {metadata.available_sensors.length > 0 ? (
-                    <div className="mt-2 ml-4">
-                      <ul className="list-disc">
-                        {metadata.available_sensors.map((sensor, index) => (
-                          <li key={index}>{sensor.replace('SensorData_', '')}</li>
-                        ))}
-                      </ul>
+                    <div className="mt-2">
+                      <div className="flex items-center space-x-4">
+                        {/* X-Axis Button */}
+                        <div className="relative">
+                          <button
+                            onClick={() => toggleDropdown('x')}
+                            className="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded text-sm"
+                          >
+                            {xAxisSensor ? `X-Axis: ${xAxisSensor}` : 'Select X-Axis'}
+                          </button>
+                          {xDropdownOpen && (
+                            <div className="absolute mt-2 bg-white border border-gray-300 rounded shadow-lg z-10">
+                              <button
+                                onClick={() => selectSensor('x', 'Time')}
+                                className="block px-4 py-2 text-left hover:bg-gray-200 w-full"
+                              >
+                                Time
+                              </button>
+                              {metadata.available_sensors.map((sensor, index) => (
+                                <button
+                                  key={index}
+                                  onClick={() => selectSensor('x', sensor)}
+                                  className="block px-4 py-2 text-left hover:bg-gray-200 w-full"
+                                >
+                                  {sensor.replace('SensorData_', '')}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Y-Axis Button */}
+                        <div className="relative">
+                          <button
+                            onClick={() => toggleDropdown('y')}
+                            className="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded text-sm"
+                          >
+                            {yAxisSensor ? `Y-Axis: ${yAxisSensor}` : 'Select Y-Axis'}
+                          </button>
+                          {yDropdownOpen && (
+                            <div className="absolute mt-2 bg-white border border-gray-300 rounded shadow-lg z-10">
+                              {metadata.available_sensors.map((sensor, index) => (
+                                <button
+                                  key={index}
+                                  onClick={() => selectSensor('y', sensor)}
+                                  className="block px-4 py-2 text-left hover:bg-gray-200 w-full"
+                                >
+                                  {sensor.replace('SensorData_', '')}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Time Range Button */}
+                        <div className="relative">
+                          <button
+                            onClick={() => toggleDropdown('time')}
+                            className="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded text-sm"
+                          >
+                            {timeRange
+                              ? `Time: ${formatDateTime(timeRange.start)} - ${formatDateTime(timeRange.end)}`
+                              : 'Select Time Range'}
+                          </button>
+                          {timeDropdownOpen && metadata.time_range.first_timestamp && metadata.time_range.last_timestamp && (
+                            <div className="absolute mt-2 bg-white border border-gray-300 rounded shadow-lg z-10">
+                              <button
+                                onClick={() =>
+                                  selectTimeRange({
+                                    start: metadata.time_range.first_timestamp as string,
+                                    end: metadata.time_range.last_timestamp as string
+                                  })
+                                }
+                                className="block px-4 py-2 text-left hover:bg-gray-200 w-full"
+                              >
+                                {`${formatDateTime(metadata.time_range.first_timestamp)} - ${formatDateTime(
+                                  metadata.time_range.last_timestamp
+                                )}`}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <span className="ml-2">No sensors available</span>
@@ -119,7 +222,7 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
               </div>
             </div>
           )}
-          
+
           {!metadata && (
             <div className="col-span-2">
               <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded">
@@ -133,4 +236,4 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
   );
 };
 
-export default ExperimentDataViewer;  
+export default ExperimentDataViewer;
