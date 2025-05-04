@@ -124,9 +124,23 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
       if (response.data.success) {
         // Transforming response data into a metadata map
         const metadataMap: Record<string, ExperimentMetadata> = {};
+        
+        console.log("Received metadata response:", response.data.metadata);
+        
         response.data.metadata.forEach((item: ExperimentMetadata) => {
-          const key = `${item.table_id}_${item.experiment_name}_${item.mac_address || ''}`;
-          metadataMap[key] = item;
+          // Creating multiple key variations to ensure we can find the metadata later
+          const extractedTableId = extractTableId(item.table_id);
+          
+          // Full format key
+          const key1 = `${item.table_id}_${item.experiment_name}_${item.mac_address || ''}`;
+          // Extracted table ID key
+          const key2 = `${extractedTableId}_${item.experiment_name}_${item.mac_address || ''}`;
+          
+          // Store with both key formats to ensure we can find it
+          metadataMap[key1] = item;
+          metadataMap[key2] = item;
+          
+          console.log("Created metadata keys:", key1, key2, "for item:", item);
         });
   
         setMetadata(metadataMap);
@@ -140,7 +154,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
         experiments: permissions.map(permission => ({
           project_id: permission.project_id,
           dataset_name: permission.dataset_name,
-          table_id: extractTableId(permission.table_id), // Log fixed table_id
+          table_id: extractTableId(permission.table_id),
           experiment_name: permission.experiment_name,
           mac_address: permission.mac_address
         }))
@@ -156,9 +170,38 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     return parts.length > 2 ? parts[2] : fullTableId; // Returns only the table name
   };
   
+  // Debug and fixed getExperimentMetadata function
   const getExperimentMetadata = (permission: UserPermission) => {
-    const key = `${permission.table_id}_${permission.experiment_name}_${permission.mac_address || ''}`;
-    return metadata[key];
+    // Try both with full table_id and extracted table_id
+    const fullTableKey = `${permission.table_id}_${permission.experiment_name}_${permission.mac_address || ''}`;
+    const extractedTableKey = `${extractTableId(permission.table_id)}_${permission.experiment_name}_${permission.mac_address || ''}`;
+    
+    console.log("Looking up metadata with keys:", {
+      fullTableKey,
+      extractedTableKey
+    });
+    console.log("Available metadata keys:", Object.keys(metadata));
+    
+    // Try both key formats
+    const result = metadata[fullTableKey] || metadata[extractedTableKey];
+    
+    if (!result) {
+      console.log("No metadata found for permission:", permission);
+      
+      // Additional debugging - try to find a partial match
+      const possibleMatches = Object.keys(metadata).filter(key => 
+        key.includes(permission.experiment_name) || 
+        key.includes(extractTableId(permission.table_id))
+      );
+      
+      if (possibleMatches.length > 0) {
+        console.log("Possible matching keys:", possibleMatches);
+      }
+    } else {
+      console.log("Found metadata:", result);
+    }
+    
+    return result;
   };
 
   useEffect(() => {
@@ -227,6 +270,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
 
   const handleBackToExperiments = () => {
     setShowExperimentDashboard(false);
+    setSelectedPermission(null); // Optionally clear selection when going back
   };
 
   const formatDate = (dateString?: string | null) => {
@@ -235,12 +279,25 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     return isNaN(date.getTime()) ? dateString : date.toLocaleDateString();
   };
 
-  const formatTimeRange = (firstTime: string | null, lastTime: string | null) => {
-    if (!firstTime || !lastTime) return 'No time data available';
-
-    const firstDate = new Date(firstTime);
-    const lastDate = new Date(lastTime);
-
+  // Update only the formatTimeRange function
+const formatTimeRange = (firstTime: { value: string } | string | null, lastTime: { value: string } | string | null) => {
+  if (!firstTime || !lastTime) return 'No time data available';
+  
+  // Extract string values if objects
+  const firstTimeStr = typeof firstTime === 'object' && firstTime !== null && 'value' in firstTime 
+    ? firstTime.value 
+    : firstTime;
+    
+  const lastTimeStr = typeof lastTime === 'object' && lastTime !== null && 'value' in lastTime 
+    ? lastTime.value 
+    : lastTime;
+  
+  console.log("Raw timestamp values (extracted):", { firstTimeStr, lastTimeStr });
+  
+  try {
+    const firstDate = new Date(firstTimeStr);
+    const lastDate = new Date(lastTimeStr);
+    
     if (isNaN(firstDate.getTime()) || isNaN(lastDate.getTime())) {
       return 'Invalid time data';
     }
@@ -257,7 +314,12 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     const formattedLast = lastDate.toLocaleDateString(undefined, options);
 
     return `${formattedFirst} - ${formattedLast}`;
-  };
+  } catch (err) {
+    console.error("Error formatting time range:", err);
+    return 'Error formatting time range';
+  }
+};
+   
 
   if (loading) {
     return (
@@ -271,6 +333,17 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
     return <div className="text-red-500 text-center">{error}</div>;
   }
 
+  // Show the experiment data viewer if an experiment is selected and the flag is true
+  if (showExperimentDashboard && selectedPermission) {
+    const experimentMetadata = getExperimentMetadata(selectedPermission);
+    return (
+      <ExperimentDataViewer 
+        permission={selectedPermission}
+        metadata={experimentMetadata}
+        onBack={handleBackToExperiments}
+      />
+    );
+  }
     
   return (
     <div className="p-4">
@@ -384,4 +457,4 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user }) => {
   );
 };
 
-export default UserDashboard;
+export default UserDashboard; 
