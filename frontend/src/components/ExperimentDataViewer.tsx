@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { UserPermission } from './userDashboard';
+import Plot from 'react-plotly.js';
 
 interface ExperimentMetadata {
   table_id: string;
@@ -41,6 +42,8 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [plotData, setPlotData] = useState<any[]>([]);
+  const [showPlot, setShowPlot] = useState(false);
 
   const formatDateTime = (dateInput?: { value: string } | string | null) => {
     if (!dateInput) return 'N/A';
@@ -107,6 +110,7 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
     setLoading(true);
     setErrorMessage(null);
     setSuccessMessage(null);
+    setShowPlot(false);
 
     try {
       const response = await axios.post<ExperimentDataResponse>(
@@ -117,6 +121,14 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
       if (response.data.success) {
         setSuccessMessage('Data fetched successfully!');
         console.log('Fetched Data:', response.data.data);
+        
+        // Set the data for plotting
+        if (response.data.data && response.data.data.length > 0) {
+          setPlotData(response.data.data);
+          setShowPlot(true);
+        } else {
+          setErrorMessage('No data points available for plotting');
+        }
       } else {
         setErrorMessage('Failed to fetch data: ' + response.data.message);
       }
@@ -125,6 +137,48 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  // Prepare data for Plotly
+  const getPlotlyData = () => {
+    if (!plotData || plotData.length === 0 || !xAxisSensor || !yAxisSensor) return [];
+
+    // For time on x-axis
+    if (xAxisSensor === 'Time') {
+      return [{
+        x: plotData.map(point => new Date(point.TimeStamp)),
+        y: plotData.map(point => point[yAxisSensor as string]),
+        type: 'scatter',
+        mode: 'lines+markers',
+        marker: { color: 'blue' },
+        name: yAxisSensor
+      }];
+    } 
+    
+    // For other sensors on x-axis
+    return [{
+      x: plotData.map(point => point[xAxisSensor]),
+      y: plotData.map(point => point[yAxisSensor as string]),
+      type: 'scatter',
+      mode: 'lines+markers',
+      marker: { color: 'blue' },
+      name: `${xAxisSensor} vs ${yAxisSensor}`
+    }];
+  };
+
+  const getPlotLayout = () => {
+    return {
+      title: `${permission.experiment_name} - Data Visualization`,
+      xaxis: {
+        title: xAxisSensor === 'Time' ? 'Timestamp' : xAxisSensor
+      },
+      yaxis: {
+        title: yAxisSensor
+      },
+      height: 500,
+      autosize: true,
+      margin: { l: 50, r: 50, b: 100, t: 100, pad: 4 }
+    };
   };
 
   return (
@@ -294,6 +348,21 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
           {errorMessage && <p className="mt-2 text-red-500">{errorMessage}</p>}
           {successMessage && <p className="mt-2 text-green-500">{successMessage}</p>}
         </div>
+
+        {/* Plot visualization */}
+        {showPlot && plotData.length > 0 && (
+          <div className="mt-8 border border-gray-200 rounded-lg p-4 bg-white">
+            <h2 className="text-xl font-semibold mb-4">Data Visualization</h2>
+            <div className="w-full h-full">
+              <Plot
+                data={getPlotlyData()}
+                layout={getPlotLayout()}
+                config={{ responsive: true }}
+                style={{ width: '100%', height: '100%' }}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
