@@ -140,47 +140,55 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
   };
 
   // Prepare data for Plotly
-  const getPlotlyData = () => {
+  const getPlotlyData = (): Partial<Plotly.Data>[] => {
     if (!plotData || plotData.length === 0 || !xAxisSensor || !yAxisSensor) return [];
-
+  
     // For time on x-axis
     if (xAxisSensor === 'Time') {
-      return [{
-        x: plotData.map(point => new Date(point.TimeStamp)),
-        y: plotData.map(point => point[yAxisSensor as string]),
-        type: 'scatter',
+      return [
+        {
+          x: plotData.map((point) => new Date(point.TimeStamp)),
+          y: plotData.map((point) => point[yAxisSensor as string]),
+          type: 'scatter', // Explicitly set the type as 'scatter'
+          mode: 'lines+markers',
+          marker: { color: 'blue' },
+          name: yAxisSensor,
+        } as Partial<Plotly.Data>, // Cast object as Partial<Plotly.Data>
+      ];
+    }
+  
+    // For other sensors on x-axis
+    return [
+      {
+        x: plotData.map((point) => point[xAxisSensor]),
+        y: plotData.map((point) => point[yAxisSensor as string]),
+        type: 'scatter', // Explicitly set the type as 'scatter'
         mode: 'lines+markers',
         marker: { color: 'blue' },
-        name: yAxisSensor
-      }];
-    } 
-    
-    // For other sensors on x-axis
-    return [{
-      x: plotData.map(point => point[xAxisSensor]),
-      y: plotData.map(point => point[yAxisSensor as string]),
-      type: 'scatter',
-      mode: 'lines+markers',
-      marker: { color: 'blue' },
-      name: `${xAxisSensor} vs ${yAxisSensor}`
-    }];
+        name: `${xAxisSensor} vs ${yAxisSensor}`,
+      } as Partial<Plotly.Data>, // Cast object as Partial<Plotly.Data>
+    ];
   };
-
   const getPlotLayout = () => {
     return {
-      title: `${permission.experiment_name} - Data Visualization`,
+      title: {
+        text: `${permission.experiment_name} - Data Visualization`,
+      },
       xaxis: {
-        title: xAxisSensor === 'Time' ? 'Timestamp' : xAxisSensor
+        title: xAxisSensor
+          ? { text: xAxisSensor === 'Time' ? 'Timestamp' : xAxisSensor }
+          : undefined, // Ensure compatibility with the expected type
       },
       yaxis: {
         title: yAxisSensor
+          ? { text: yAxisSensor }
+          : undefined, // Ensure compatibility with the expected type
       },
       height: 500,
       autosize: true,
-      margin: { l: 50, r: 50, b: 100, t: 100, pad: 4 }
+      margin: { l: 50, r: 50, b: 100, t: 100, pad: 4 },
     };
   };
-
   return (
     <div className="p-4">
       <button
