@@ -1,7 +1,6 @@
-import React, { useState, Component, ReactNode } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
 import { UserPermission } from './userDashboard';
-import Plot from 'react-plotly.js';
 
 interface ExperimentMetadata {
   table_id: string;
@@ -28,29 +27,6 @@ interface ExperimentDataViewerProps {
 
 const API_BASE_URL = 'http://localhost:3001'; // Define the base URL for the backend API
 
-// Error Boundary to catch runtime plot errors
-class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
-  constructor(props: any) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: any, errorInfo: any) {
-    console.error('Error caught in Error Boundary:', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return <div>Something went wrong while rendering the plot.</div>;
-    }
-    return this.props.children;
-  }
-}
-
 const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
   permission,
   metadata,
@@ -65,8 +41,6 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [plotData, setPlotData] = useState<any[]>([]);
-  const [showPlot, setShowPlot] = useState(false);
 
   const formatDateTime = (dateInput?: { value: string } | string | null) => {
     if (!dateInput) return 'N/A';
@@ -133,7 +107,6 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
     setLoading(true);
     setErrorMessage(null);
     setSuccessMessage(null);
-    setShowPlot(false);
 
     try {
       const response = await axios.post<ExperimentDataResponse>(
@@ -144,14 +117,6 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
       if (response.data.success) {
         setSuccessMessage('Data fetched successfully!');
         console.log('Fetched Data:', response.data.data);
-
-        // Set the data for plotting
-        if (response.data.data && response.data.data.length > 0) {
-          setPlotData(response.data.data);
-          setShowPlot(true);
-        } else {
-          setErrorMessage('No data points available for plotting');
-        }
       } else {
         setErrorMessage('Failed to fetch data: ' + response.data.message);
       }
@@ -160,62 +125,6 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
     } finally {
       setLoading(false);
     }
-  };
-
-  // Prepare data for Plotly
-  const getPlotlyData = (): Partial<Plotly.Data>[] => {
-    if (!plotData || plotData.length === 0 || !xAxisSensor || !yAxisSensor) return [];
-
-    try {
-      if (xAxisSensor === 'Time') {
-        return [
-          {
-            x: plotData.map((point) => {
-              const date = new Date(point.TimeStamp);
-              return isNaN(date.getTime()) ? '' : date.toISOString();
-            }),
-            y: plotData.map((point) => point[yAxisSensor as string] ?? 0),
-            type: 'scatter',
-            mode: 'lines+markers',
-            marker: { color: 'blue' },
-            name: yAxisSensor,
-          },
-        ];
-      }
-
-      return [
-        {
-          x: plotData.map((point) => point[xAxisSensor as string] ?? 0),
-          y: plotData.map((point) => point[yAxisSensor as string] ?? 0),
-          type: 'scatter',
-          mode: 'lines+markers',
-          marker: { color: 'blue' },
-          name: `${xAxisSensor} vs ${yAxisSensor}`,
-        },
-      ];
-    } catch (e) {
-      console.error('Error generating Plotly data:', e);
-      return [];
-    }
-  };
-
-  const getPlotLayout = () => {
-    return {
-      title: {
-        text: `${permission.experiment_name} - Data Visualization`,
-      },
-      xaxis: {
-        title: xAxisSensor
-          ? { text: xAxisSensor === 'Time' ? 'Timestamp' : xAxisSensor }
-          : undefined,
-      },
-      yaxis: {
-        title: yAxisSensor ? { text: yAxisSensor } : undefined,
-      },
-      height: 500,
-      autosize: true,
-      margin: { l: 50, r: 50, b: 100, t: 100, pad: 4 },
-    };
   };
 
   return (
@@ -264,12 +173,10 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
               <h2 className="text-lg font-semibold mb-3">Experiment Metadata</h2>
               <div className="space-y-2">
                 <div>
-                  <span className="font-medium">First Timestamp:</span>{' '}
-                  {formatDateTime(metadata.time_range.first_timestamp)}
+                  <span className="font-medium">First Timestamp:</span> {formatDateTime(metadata.time_range.first_timestamp)}
                 </div>
                 <div>
-                  <span className="font-medium">Last Timestamp:</span>{' '}
-                  {formatDateTime(metadata.time_range.last_timestamp)}
+                  <span className="font-medium">Last Timestamp:</span> {formatDateTime(metadata.time_range.last_timestamp)}
                 </div>
                 <div>
                   <span className="font-medium">Available Sensors:</span>
@@ -338,25 +245,23 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
                               ? `Time: ${formatDateTime(timeRange.start)} - ${formatDateTime(timeRange.end)}`
                               : 'Select Time Range'}
                           </button>
-                          {timeDropdownOpen &&
-                            metadata.time_range.first_timestamp &&
-                            metadata.time_range.last_timestamp && (
-                              <div className="absolute mt-2 bg-white border border-gray-300 rounded shadow-lg z-10">
-                                <button
-                                  onClick={() =>
-                                    selectTimeRange({
-                                      start: metadata.time_range.first_timestamp as string,
-                                      end: metadata.time_range.last_timestamp as string
-                                    })
-                                  }
-                                  className="block px-4 py-2 text-left hover:bg-gray-200 w-full"
-                                >
-                                  {`${formatDateTime(metadata.time_range.first_timestamp)} - ${formatDateTime(
-                                    metadata.time_range.last_timestamp
-                                  )}`}
-                                </button>
-                              </div>
-                            )}
+                          {timeDropdownOpen && metadata.time_range.first_timestamp && metadata.time_range.last_timestamp && (
+                            <div className="absolute mt-2 bg-white border border-gray-300 rounded shadow-lg z-10">
+                              <button
+                                onClick={() =>
+                                  selectTimeRange({
+                                    start: metadata.time_range.first_timestamp as string,
+                                    end: metadata.time_range.last_timestamp as string
+                                  })
+                                }
+                                className="block px-4 py-2 text-left hover:bg-gray-200 w-full"
+                              >
+                                {`${formatDateTime(metadata.time_range.first_timestamp)} - ${formatDateTime(
+                                  metadata.time_range.last_timestamp
+                                )}`}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -389,23 +294,6 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
           {errorMessage && <p className="mt-2 text-red-500">{errorMessage}</p>}
           {successMessage && <p className="mt-2 text-green-500">{successMessage}</p>}
         </div>
-
-        {/* Plot visualization */}
-        {showPlot && plotData.length > 0 && (
-          <ErrorBoundary>
-            <div className="mt-8 border border-gray-200 rounded-lg p-4 bg-white">
-              <h2 className="text-xl font-semibold mb-4">Data Visualization</h2>
-              <div className="w-full h-full">
-                <Plot
-                  data={getPlotlyData()}
-                  layout={getPlotLayout()}
-                  config={{ responsive: true }}
-                  style={{ width: '100%', height: '100%' }}
-                />
-              </div>
-            </div>
-          </ErrorBoundary>
-        )}
       </div>
     </div>
   );
