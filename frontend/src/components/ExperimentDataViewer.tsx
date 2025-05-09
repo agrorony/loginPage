@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, Component, ReactNode } from 'react';
 import axios from 'axios';
 import { UserPermission } from './userDashboard';
 import Plot from 'react-plotly.js';
@@ -27,6 +27,29 @@ interface ExperimentDataViewerProps {
 }
 
 const API_BASE_URL = 'http://localhost:3001'; // Define the base URL for the backend API
+
+// Error Boundary to catch runtime plot errors
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error('Error caught in Error Boundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <div>Something went wrong while rendering the plot.</div>;
+    }
+    return this.props.children;
+  }
+}
 
 const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
   permission,
@@ -121,7 +144,7 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
       if (response.data.success) {
         setSuccessMessage('Data fetched successfully!');
         console.log('Fetched Data:', response.data.data);
-        
+
         // Set the data for plotting
         if (response.data.data && response.data.data.length > 0) {
           setPlotData(response.data.data);
@@ -142,33 +165,40 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
   // Prepare data for Plotly
   const getPlotlyData = (): Partial<Plotly.Data>[] => {
     if (!plotData || plotData.length === 0 || !xAxisSensor || !yAxisSensor) return [];
-  
-    // For time on x-axis
-    if (xAxisSensor === 'Time') {
+
+    try {
+      if (xAxisSensor === 'Time') {
+        return [
+          {
+            x: plotData.map((point) => {
+              const date = new Date(point.TimeStamp);
+              return isNaN(date.getTime()) ? '' : date.toISOString();
+            }),
+            y: plotData.map((point) => point[yAxisSensor as string] ?? 0),
+            type: 'scatter',
+            mode: 'lines+markers',
+            marker: { color: 'blue' },
+            name: yAxisSensor,
+          },
+        ];
+      }
+
       return [
         {
-          x: plotData.map((point) => new Date(point.TimeStamp)),
-          y: plotData.map((point) => point[yAxisSensor as string]),
-          type: 'scatter', // Explicitly set the type as 'scatter'
+          x: plotData.map((point) => point[xAxisSensor as string] ?? 0),
+          y: plotData.map((point) => point[yAxisSensor as string] ?? 0),
+          type: 'scatter',
           mode: 'lines+markers',
           marker: { color: 'blue' },
-          name: yAxisSensor,
-        } as Partial<Plotly.Data>, // Cast object as Partial<Plotly.Data>
+          name: `${xAxisSensor} vs ${yAxisSensor}`,
+        },
       ];
+    } catch (e) {
+      console.error('Error generating Plotly data:', e);
+      return [];
     }
-  
-    // For other sensors on x-axis
-    return [
-      {
-        x: plotData.map((point) => point[xAxisSensor]),
-        y: plotData.map((point) => point[yAxisSensor as string]),
-        type: 'scatter', // Explicitly set the type as 'scatter'
-        mode: 'lines+markers',
-        marker: { color: 'blue' },
-        name: `${xAxisSensor} vs ${yAxisSensor}`,
-      } as Partial<Plotly.Data>, // Cast object as Partial<Plotly.Data>
-    ];
   };
+
   const getPlotLayout = () => {
     return {
       title: {
@@ -177,18 +207,17 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
       xaxis: {
         title: xAxisSensor
           ? { text: xAxisSensor === 'Time' ? 'Timestamp' : xAxisSensor }
-          : undefined, // Ensure compatibility with the expected type
+          : undefined,
       },
       yaxis: {
-        title: yAxisSensor
-          ? { text: yAxisSensor }
-          : undefined, // Ensure compatibility with the expected type
+        title: yAxisSensor ? { text: yAxisSensor } : undefined,
       },
       height: 500,
       autosize: true,
       margin: { l: 50, r: 50, b: 100, t: 100, pad: 4 },
     };
   };
+
   return (
     <div className="p-4">
       <button
@@ -235,10 +264,12 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
               <h2 className="text-lg font-semibold mb-3">Experiment Metadata</h2>
               <div className="space-y-2">
                 <div>
-                  <span className="font-medium">First Timestamp:</span> {formatDateTime(metadata.time_range.first_timestamp)}
+                  <span className="font-medium">First Timestamp:</span>{' '}
+                  {formatDateTime(metadata.time_range.first_timestamp)}
                 </div>
                 <div>
-                  <span className="font-medium">Last Timestamp:</span> {formatDateTime(metadata.time_range.last_timestamp)}
+                  <span className="font-medium">Last Timestamp:</span>{' '}
+                  {formatDateTime(metadata.time_range.last_timestamp)}
                 </div>
                 <div>
                   <span className="font-medium">Available Sensors:</span>
@@ -307,23 +338,25 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
                               ? `Time: ${formatDateTime(timeRange.start)} - ${formatDateTime(timeRange.end)}`
                               : 'Select Time Range'}
                           </button>
-                          {timeDropdownOpen && metadata.time_range.first_timestamp && metadata.time_range.last_timestamp && (
-                            <div className="absolute mt-2 bg-white border border-gray-300 rounded shadow-lg z-10">
-                              <button
-                                onClick={() =>
-                                  selectTimeRange({
-                                    start: metadata.time_range.first_timestamp as string,
-                                    end: metadata.time_range.last_timestamp as string
-                                  })
-                                }
-                                className="block px-4 py-2 text-left hover:bg-gray-200 w-full"
-                              >
-                                {`${formatDateTime(metadata.time_range.first_timestamp)} - ${formatDateTime(
-                                  metadata.time_range.last_timestamp
-                                )}`}
-                              </button>
-                            </div>
-                          )}
+                          {timeDropdownOpen &&
+                            metadata.time_range.first_timestamp &&
+                            metadata.time_range.last_timestamp && (
+                              <div className="absolute mt-2 bg-white border border-gray-300 rounded shadow-lg z-10">
+                                <button
+                                  onClick={() =>
+                                    selectTimeRange({
+                                      start: metadata.time_range.first_timestamp as string,
+                                      end: metadata.time_range.last_timestamp as string
+                                    })
+                                  }
+                                  className="block px-4 py-2 text-left hover:bg-gray-200 w-full"
+                                >
+                                  {`${formatDateTime(metadata.time_range.first_timestamp)} - ${formatDateTime(
+                                    metadata.time_range.last_timestamp
+                                  )}`}
+                                </button>
+                              </div>
+                            )}
                         </div>
                       </div>
                     </div>
@@ -359,17 +392,19 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
 
         {/* Plot visualization */}
         {showPlot && plotData.length > 0 && (
-          <div className="mt-8 border border-gray-200 rounded-lg p-4 bg-white">
-            <h2 className="text-xl font-semibold mb-4">Data Visualization</h2>
-            <div className="w-full h-full">
-              <Plot
-                data={getPlotlyData()}
-                layout={getPlotLayout()}
-                config={{ responsive: true }}
-                style={{ width: '100%', height: '100%' }}
-              />
+          <ErrorBoundary>
+            <div className="mt-8 border border-gray-200 rounded-lg p-4 bg-white">
+              <h2 className="text-xl font-semibold mb-4">Data Visualization</h2>
+              <div className="w-full h-full">
+                <Plot
+                  data={getPlotlyData()}
+                  layout={getPlotLayout()}
+                  config={{ responsive: true }}
+                  style={{ width: '100%', height: '100%' }}
+                />
+              </div>
             </div>
-          </div>
+          </ErrorBoundary>
         )}
       </div>
     </div>
