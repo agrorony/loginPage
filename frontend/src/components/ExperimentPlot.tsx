@@ -8,8 +8,9 @@ interface ExperimentPlotProps {
   style?: React.CSSProperties;
 }
 
-const ExperimentPlot: React.FC<ExperimentPlotProps> = ({
-  data = [
+const ExperimentPlot: React.FC<ExperimentPlotProps> = (props) => {
+  // Use default values if props are not provided
+  const defaultData: Partial<Plotly.PlotData>[] = [
     {
       x: [1, 2, 3, 4],
       y: [10, 15, 13, 17],
@@ -18,36 +19,44 @@ const ExperimentPlot: React.FC<ExperimentPlotProps> = ({
       marker: { color: 'blue' },
       name: 'Sample Data',
     },
-  ],
-  layout = {
+  ];
+  
+  const defaultLayout = {
     title: { text: 'Sample Plot' },
     autosize: true,
     margin: { l: 50, r: 50, b: 50, t: 50 },
-  },
-  config = { responsive: true },
-  style = { width: '100%', height: '100%' },
-}) => {
-  // Debugging Logs
-  console.log('ExperimentPlot Props:', { data, layout, config, style });
+  };
+  
+  const defaultConfig = { responsive: true };
+  const defaultStyle = { width: '100%', height: '100%' };
 
-  if (!Array.isArray(data)) {
-    console.error('Invalid data prop passed to ExperimentPlot. Expected an array but got:', data);
-    return <div>Error: Invalid data passed to the plot.</div>;
+  // Safely extract props with fallbacks
+  const safeData = Array.isArray(props.data) ? props.data : defaultData;
+  const safeLayout = props.layout && typeof props.layout === 'object' ? props.layout : defaultLayout;
+  const safeConfig = props.config && typeof props.config === 'object' ? props.config : defaultConfig;
+  const safeStyle = props.style || defaultStyle;
+
+  // Rendering with conditional check
+  try {
+    return (
+      <div className="experiment-plot-container">
+        <Plot
+          data={safeData}
+          layout={safeLayout}
+          config={safeConfig}
+          style={safeStyle}
+          useResizeHandler={true}
+        />
+      </div>
+    );
+  } catch (error) {
+    console.error('Error rendering plot:', error);
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded">
+        Error rendering plot. Please check console for details.
+      </div>
+    );
   }
-
-  if (typeof layout !== 'object') {
-    console.error('Invalid layout prop passed to ExperimentPlot. Expected an object but got:', layout);
-    return <div>Error: Invalid layout passed to the plot.</div>;
-  }
-
-  return (
-    <Plot
-      data={data}
-      layout={layout}
-      config={config}
-      style={style}
-    />
-  );
 };
 
 export default ExperimentPlot;

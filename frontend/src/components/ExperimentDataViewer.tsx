@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { UserPermission } from './userDashboard';
+import ExperimentPlot from './ExperimentPlot';
 
 interface ExperimentMetadata {
   table_id: string;
@@ -293,6 +294,20 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
           </button>
           {errorMessage && <p className="mt-2 text-red-500">{errorMessage}</p>}
           {successMessage && <p className="mt-2 text-green-500">{successMessage}</p>}
+        </div>
+
+        {/* Plot Section */}
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold mb-4">Data Visualization</h2>
+          <div className="border border-gray-200 rounded-lg p-2" style={{ height: '400px' }}>
+            <ExperimentPlot 
+              layout={{
+                title: { text: `${permission.experiment_name} Sample Data` },
+                autosize: true,
+                margin: { l: 50, r: 50, b: 50, t: 50 }
+              }}
+            />
+          </div>
         </div>
       </div>
     </div>
