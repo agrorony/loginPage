@@ -2,7 +2,7 @@ import React from 'react';
 import Plot from 'react-plotly.js';
 
 interface ExperimentPlotProps {
-  data?: Partial<Plotly.PlotData>[];
+  data?: Partial<Plotly.PlotData>[]|null;
   layout?: Partial<Plotly.Layout>;
   config?: Partial<Plotly.Config>;
   style?: React.CSSProperties;
@@ -31,11 +31,11 @@ const ExperimentPlot: React.FC<ExperimentPlotProps> = (props) => {
   const defaultStyle = { width: '100%', height: '100%' };
 
   // Safely extract props with fallbacks
-  const safeData = Array.isArray(props.data) ? props.data : defaultData;
+  const safeData =  defaultData;
   const safeLayout = props.layout && typeof props.layout === 'object' ? props.layout : defaultLayout;
   const safeConfig = props.config && typeof props.config === 'object' ? props.config : defaultConfig;
   const safeStyle = props.style || defaultStyle;
-
+  
   // Rendering with conditional check
   try {
     return (

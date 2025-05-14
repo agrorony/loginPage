@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { UserPermission } from './userDashboard';
 import ExperimentPlot from './ExperimentPlot';
+import { PlotData } from 'plotly.js';
+
 
 interface ExperimentMetadata {
   table_id: string;
@@ -42,6 +44,8 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [plotData, setPlotData] = useState<Partial<PlotData>[] | null>(null);
+
 
   const formatDateTime = (dateInput?: { value: string } | string | null) => {
     if (!dateInput) return 'N/A';
@@ -116,9 +120,23 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
       );
 
       if (response.data.success) {
-        setSuccessMessage('Data fetched successfully!');
-        console.log('Fetched Data:', response.data.data);
-      } else {
+      setSuccessMessage('Data fetched successfully!');
+      console.log('Fetched Data:', response.data.data);
+
+      const transformedData: Partial<Plotly.PlotData>[] = [
+        {
+          x: response.data.data.map((row) => row[xAxisSensor]),
+          y: response.data.data.map((row) => row[yAxisSensor]),
+          type: 'scatter',
+          mode: 'lines+markers',
+          marker: { color: 'blue' },
+          name: `${yAxisSensor} vs ${xAxisSensor}`,
+        },
+      ];
+
+      setPlotData(transformedData);
+    }
+ else {
         setErrorMessage('Failed to fetch data: ' + response.data.message);
       }
     } catch (error: any) {
@@ -127,11 +145,11 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
       setLoading(false);
     }
   };
-
+console.log('plotData before rendering:', plotData)
   return (
     <div className="p-4">
       <button
-        onClick={onBack}
+        onClick={onBack}  
         className="mb-4 bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded flex items-center"
       >
         <span>← Back to Experiments</span>
@@ -300,13 +318,13 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
         <div className="mt-8">
           <h2 className="text-lg font-semibold mb-4">Data Visualization</h2>
           <div className="border border-gray-200 rounded-lg p-2" style={{ height: '400px' }}>
+            
+
             <ExperimentPlot 
-              layout={{
-                title: { text: `${permission.experiment_name} Sample Data` },
-                autosize: true,
-                margin: { l: 50, r: 50, b: 50, t: 50 }
-              }}
-            />
+            
+          data={plotData}
+              />
+
           </div>
         </div>
       </div>
