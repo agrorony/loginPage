@@ -4,7 +4,6 @@ import { UserPermission } from './userDashboard';
 import ExperimentPlot from './ExperimentPlot';
 import { PlotData } from 'plotly.js';
 
-
 interface ExperimentMetadata {
   table_id: string;
   experiment_name: string;
@@ -28,7 +27,7 @@ interface ExperimentDataViewerProps {
   onBack: () => void;
 }
 
-const API_BASE_URL = 'http://localhost:3001'; // Define the base URL for the backend API
+const API_BASE_URL = 'http://localhost:3001';
 
 const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
   permission,
@@ -46,14 +45,12 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [plotData, setPlotData] = useState<Partial<PlotData>[] | null>(null);
 
-
   const formatDateTime = (dateInput?: { value: string } | string | null) => {
     if (!dateInput) return 'N/A';
     const dateString =
       typeof dateInput === 'object' && dateInput !== null && 'value' in dateInput
         ? dateInput.value
         : dateInput;
-
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return 'Invalid date';
@@ -120,23 +117,49 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
       );
 
       if (response.data.success) {
-      setSuccessMessage('Data fetched successfully!');
-      console.log('Fetched Data:', response.data.data);
+        setSuccessMessage('Data fetched successfully!');
+        console.log('Fetched Data:', response.data.data);
 
-      const transformedData: Partial<Plotly.PlotData>[] = [
-        {
-          x: response.data.data.map((row) => row[xAxisSensor]),
-          y: response.data.data.map((row) => row[yAxisSensor]),
-          type: 'scatter',
-          mode: 'lines+markers',
-          marker: { color: 'blue' },
-          name: `${yAxisSensor} vs ${xAxisSensor}`,
-        },
-      ];
+        // Debug: show shape/type of each row
+        if (Array.isArray(response.data.data)) {
+          response.data.data.forEach((row, i) => {
+            console.log(`Fetched Data Row [${i}]:`, row, "Keys:", Object.keys(row));
+          });
+        }
 
-      setPlotData(transformedData);
-    }
- else {
+        // Defensive: check all values for primitives
+        const xArr = response.data.data.map((row) => row[xAxisSensor]);
+        const yArr = response.data.data.map((row) => row[yAxisSensor]);
+        xArr.forEach((v, i) => {
+          if (typeof v === "object" && v !== null) {
+            console.warn(`❗ xAxis value at index ${i} is not primitive:`, v);
+          }
+        });
+        yArr.forEach((v, i) => {
+          if (typeof v === "object" && v !== null) {
+            console.warn(`❗ yAxis value at index ${i} is not primitive:`, v);
+          }
+        });
+
+        const transformedData: Partial<Plotly.PlotData>[] = [
+          {
+            x: xArr,
+            y: yArr,
+            type: 'scatter',
+            mode: 'lines+markers',
+            marker: { color: 'blue' },
+            name: `${yAxisSensor} vs ${xAxisSensor}`,
+          },
+        ];
+
+        // Check for accidental React elements
+        if (transformedData.some(d => React.isValidElement(d))) {
+          console.error("❗❗❗ One or more traces in transformedData are React elements, not plain objects. This will break Plotly.");
+        }
+        console.log('Transformed Data for Plot:', transformedData);
+
+        setPlotData(transformedData);
+      } else {
         setErrorMessage('Failed to fetch data: ' + response.data.message);
       }
     } catch (error: any) {
@@ -145,19 +168,20 @@ const ExperimentDataViewer: React.FC<ExperimentDataViewerProps> = ({
       setLoading(false);
     }
   };
-console.log('plotData before rendering:', plotData)
+
+  // Debug before rendering
+  console.log('plotData before rendering:', plotData);
+
   return (
     <div className="p-4">
       <button
-        onClick={onBack}  
+        onClick={onBack}
         className="mb-4 bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded flex items-center"
       >
         <span>← Back to Experiments</span>
       </button>
-
       <div className="bg-white shadow-md rounded-lg p-6">
         <h1 className="text-2xl font-bold mb-6">{permission.experiment_name}</h1>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <h2 className="text-lg font-semibold mb-3">Experiment Details</h2>
@@ -186,7 +210,6 @@ console.log('plotData before rendering:', plotData)
               )}
             </div>
           </div>
-
           {metadata && (
             <div>
               <h2 className="text-lg font-semibold mb-3">Experiment Metadata</h2>
@@ -230,7 +253,6 @@ console.log('plotData before rendering:', plotData)
                             </div>
                           )}
                         </div>
-
                         {/* Y-Axis Button */}
                         <div className="relative">
                           <button
@@ -253,7 +275,6 @@ console.log('plotData before rendering:', plotData)
                             </div>
                           )}
                         </div>
-
                         {/* Time Range Button */}
                         <div className="relative">
                           <button
@@ -291,7 +312,6 @@ console.log('plotData before rendering:', plotData)
               </div>
             </div>
           )}
-
           {!metadata && (
             <div className="col-span-2">
               <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded">
@@ -300,7 +320,6 @@ console.log('plotData before rendering:', plotData)
             </div>
           )}
         </div>
-
         {/* Fetch Data Button */}
         <div className="mt-6">
           <button
@@ -313,18 +332,11 @@ console.log('plotData before rendering:', plotData)
           {errorMessage && <p className="mt-2 text-red-500">{errorMessage}</p>}
           {successMessage && <p className="mt-2 text-green-500">{successMessage}</p>}
         </div>
-
         {/* Plot Section */}
         <div className="mt-8">
           <h2 className="text-lg font-semibold mb-4">Data Visualization</h2>
           <div className="border border-gray-200 rounded-lg p-2" style={{ height: '400px' }}>
-            
-
-            <ExperimentPlot 
-            
-          data={plotData}
-              />
-
+            <ExperimentPlot data={plotData} />
           </div>
         </div>
       </div>

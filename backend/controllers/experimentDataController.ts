@@ -2,6 +2,30 @@ import { Request, Response } from 'express';
 import { bigQueryClient } from '../dbConfig';
 
 /**
+ * Recursively unwraps `{ value: ... }` objects to their primitive values.
+ */
+function unwrapValues(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(unwrapValues);
+  } else if (obj && typeof obj === 'object') {
+    // If the object has only one key `"value"`, return that value directly
+    const keys = Object.keys(obj);
+    if (keys.length === 1 && keys[0] === 'value') {
+      return obj.value;
+    }
+    // Otherwise, process each key recursively
+    const unwrapped: any = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        unwrapped[key] = unwrapValues(obj[key]);
+      }
+    }
+    return unwrapped;
+  }
+  return obj;
+}
+
+/**
  * Fetch specific experiment data based on experiment name, time range, and selected fields.
  */
 export const getExperimentData = async (req: Request, res: Response) => {
@@ -10,10 +34,20 @@ export const getExperimentData = async (req: Request, res: Response) => {
   console.log('Request body:', req.body);
 
   // Validate inputs
-  if (!project_id || !dataset_name || !table_id || !experiment_name || !time_range || !fields || !Array.isArray(fields) || fields.length === 0) {
+  if (
+    !project_id ||
+    !dataset_name ||
+    !table_id ||
+    !experiment_name ||
+    !time_range ||
+    !fields ||
+    !Array.isArray(fields) ||
+    fields.length === 0
+  ) {
     return res.status(400).json({
       success: false,
-      message: 'Project ID, dataset name, table ID, experiment name, time range, and at least one field are required.',
+      message:
+        'Project ID, dataset name, table ID, experiment name, time range, and at least one field are required.',
     });
   }
 
@@ -34,8 +68,6 @@ export const getExperimentData = async (req: Request, res: Response) => {
     // Extract the actual table ID without project and dataset if it includes them
     let actualTableId = table_id;
     if (table_id.includes('.')) {
-      // If table_id includes dots, it might contain project.dataset.table format
-      // Extract just the last part which is the actual table ID
       const parts = table_id.split('.');
       actualTableId = parts[parts.length - 1];
     }
@@ -52,8 +84,8 @@ export const getExperimentData = async (req: Request, res: Response) => {
       query,
       params: {
         experiment_name,
-        start: startTime, // Pass the unwrapped timestamp directly
-        end: endTime,     // Pass the unwrapped timestamp directly
+        start: startTime,
+        end: endTime,
       },
     };
 
@@ -63,9 +95,12 @@ export const getExperimentData = async (req: Request, res: Response) => {
     // Execute the BigQuery query
     const [rows] = await bigQueryClient.query(options);
 
+    // Unwrap each row object recursively to remove any { value: ... } wrappers
+    const unwrappedRows = Array.isArray(rows) ? rows.map(row => unwrapValues(row)) : unwrapValues(rows);
+
     res.status(200).json({
       success: true,
-      data: rows,
+      data: unwrappedRows,
     });
   } catch (error: any) {
     console.error('Error fetching experiment data:', error);

@@ -1,0 +1,123 @@
+## Project Overview
+
+This fullstack web app enables researchers to log in and view plant experiment data stored in Google Cloud. It supports per-user data access via a permission system.
+
+**Tech Stack:**
+
+* **Frontend:** React + Axios
+* **Backend:** Express (TypeScript)
+* **Storage:** Google BigQuery (data, permissions, users)
+
+Currently, the app supports login and experiment browsing. Security is minimal—write access is disabled.
+
+---
+
+## Architecture & Data Flow
+
+### Components
+
+* **Frontend (React):**
+  Handles login, displays experiments, fetches data/metadata via API.
+
+* **Backend (Express):**
+  Serves endpoints for login, permissions, metadata, and experiment data. Queries BigQuery using service account.
+
+* **BigQuery:**
+  Stores users, permissions, metadata, and sensor data.
+
+### Interaction Flow
+
+1. **Login:**
+
+   * POST `/login` → BigQuery lookup → plaintext password check → response with user info
+
+2. **Permissions:**
+
+   * POST `/api/permissions` → fetch user’s access rights → expand `admin` roles → return list
+
+3. **Metadata:**
+
+   * POST `/api/experiments/metadata` with experiments list → return time ranges & active sensors
+
+4. **Data Fetch:**
+
+   * POST `/api/experiments/data` with selected sensors and time range → return relevant rows
+
+---
+
+## Development History
+
+### Milestones
+
+* Started with MySQL + WebSocket for auth
+* Migrated to BigQuery and HTTP-based flow using Axios
+* Implemented core features: login, permissions, metadata, data display
+
+### Tools
+
+* **Frontend:** React, Axios
+* **Backend:** Express, `@google-cloud/bigquery`
+* **Dev:** GitHub (no branches), Copilot Web
+
+---
+
+## Working Features & Issues
+
+### ✅ Working
+
+* Login & user validation
+* Permissions system
+* Metadata fetch
+* Sensor/time selection
+* Experiment data retrieval
+
+### 🛠️ In Progress
+
+* **Plotting:**
+  Data fetched, but one object fails React rendering (invalid child)
+
+### ⚠️ Known Gaps
+
+* Stateless auth (no tokens)
+* No external identity provider
+* Timestamp parsing needs improvement
+* Incomplete UI polish
+
+---
+
+## Roadmap
+
+### Bugs to Fix
+
+* Fix plot render issue (invalid React child)
+
+### Features to Add
+
+* Token-based auth
+* Cloud auth (e.g., OAuth)
+* Time field handling
+* GUI enhancements
+* Lightweight analysis tools
+* Better error messages
+
+### Cleanup
+
+* Modularize auth flow
+* Remove legacy MySQL/WebSocket code
+* Keep docs in sync with code
+
+---
+
+## Reflections
+
+### Lessons Learned
+
+* Start with scalable cloud tools like BigQuery
+* Use row-based permissions for flexibility
+
+### Skills Gained
+
+* React + TypeScript workflows
+* Querying and structuring data with BigQuery
+* Designing auth/permissions flows
+* Cloud integration and RESTful architecture

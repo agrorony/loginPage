@@ -1,0 +1,41 @@
+Array(18) [ {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, … ]
+​
+0: Object { TimeStamp: {…}, SensorData_temperature: 24.73, SensorData_humidity: 71.49 }
+​
+1: Object { TimeStamp: {…}, SensorData_temperature: 23.48, SensorData_humidity: 71.09 }
+​
+2: Object { TimeStamp: {…}, SensorData_temperature: 23.25, SensorData_humidity: 70.87 }
+​
+3: Object { TimeStamp: {…}, SensorData_temperature: 24.47, SensorData_humidity: 67.88 }
+​
+4: Object { TimeStamp: {…}, SensorData_temperature: 23.72, SensorData_humidity: 79.5 }
+​
+5: Object { TimeStamp: {…}, SensorData_temperature: 23.8, SensorData_humidity: 79.6 }
+​
+6: Object { TimeStamp: {…}, SensorData_temperature: 24.32, SensorData_humidity: 75.13 }
+​
+7: Object { TimeStamp: {…}, SensorData_temperature: 24.59, SensorData_humidity: 69.94 }
+​
+8: Object { TimeStamp: {…}, SensorData_temperature: 24.74, SensorData_humidity: 69.36 }
+​
+9: Object { TimeStamp: {…}, SensorData_temperature: 23.88, SensorData_humidity: 79.83 }
+​
+10: Object { TimeStamp: {…}, SensorData_temperature: 23.9, SensorData_humidity: 75.09 }
+​
+11: Object { TimeStamp: {…}, SensorData_temperature: 24.24, SensorData_humidity: 76.39 }
+​
+12: Object { TimeStamp: {…}, SensorData_temperature: 24.76, SensorData_humidity: 71.78 }
+​
+13: Object { TimeStamp: {…}, SensorData_temperature: 24.11, SensorData_humidity: 76.35 }
+​
+14: Object { TimeStamp: {…}, SensorData_temperature: 24.61, SensorData_humidity: 66.94 }
+​
+15: Object { TimeStamp: {…}, SensorData_temperature: 23.28, SensorData_humidity: 70.48 }
+​
+16: Ob  ject { TimeStamp: {…}, SensorData_temperature: 24.93, SensorData_humidity: 66.1 }
+​
+17: Object { TimeStamp: {…}, SensorData_temperature: 23.93, SensorData_humidity: 70.36 }
+​
+length: 18
+​
+<prototype>: Array []

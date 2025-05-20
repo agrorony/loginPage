@@ -2,46 +2,43 @@ import React from 'react';
 import Plot from 'react-plotly.js';
 
 interface ExperimentPlotProps {
-  data?: Partial<Plotly.PlotData>[]|null;
+  data?: Partial<Plotly.PlotData>[] | null;
   layout?: Partial<Plotly.Layout>;
   config?: Partial<Plotly.Config>;
   style?: React.CSSProperties;
 }
 
+// Render nothing if no data is provided
 const ExperimentPlot: React.FC<ExperimentPlotProps> = (props) => {
-  // Use default values if props are not provided
-  const defaultData: Partial<Plotly.PlotData>[] = [
-    {
-      x: [1, 2, 3, 4],
-      y: [10, 15, 13, 17],
-      type: 'scatter',
-      mode: 'lines+markers',
-      marker: { color: 'blue' },
-      name: 'Sample Data',
-    },
-  ];
-  
-  const defaultLayout = {
-    title: { text: 'Sample Plot' },
+  // If data is not available or empty, show a placeholder
+  if (!Array.isArray(props.data) || props.data.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full text-gray-500">
+        No data to plot. Please select X, Y, and time range, then fetch data.
+      </div>
+    );
+  }
+
+  const safeLayout = props.layout && typeof props.layout === 'object' ? props.layout : {
+    title: { text: 'Experiment Plot' },
     autosize: true,
     margin: { l: 50, r: 50, b: 50, t: 50 },
   };
-  
-  const defaultConfig = { responsive: true };
-  const defaultStyle = { width: '100%', height: '100%' };
+  const safeConfig = props.config && typeof props.config === 'object' ? props.config : { responsive: true };
+  const safeStyle = props.style || { width: '100%', height: '100%' };
 
-  // Safely extract props with fallbacks
-  const safeData =  defaultData;
-  const safeLayout = props.layout && typeof props.layout === 'object' ? props.layout : defaultLayout;
-  const safeConfig = props.config && typeof props.config === 'object' ? props.config : defaultConfig;
-  const safeStyle = props.style || defaultStyle;
-  
-  // Rendering with conditional check
+  // Debugging logs for all props and types
+  console.log("===== ExperimentPlot Debugger =====");
+  console.log("data (raw):", props.data);
+  console.log("layout:", safeLayout);
+  console.log("config:", safeConfig);
+  console.log("style:", safeStyle);
+
   try {
     return (
       <div className="experiment-plot-container">
         <Plot
-          data={safeData}
+          data={props.data}
           layout={safeLayout}
           config={safeConfig}
           style={safeStyle}
